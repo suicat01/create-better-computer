@@ -10,7 +10,9 @@ authors="suicat01"
 logoFile="logo.png"
 description='''
 CB电脑（Create: Better Computer）—— 一台基于机械动力的积木编程计算机。
-脚本可以发送机械动力红石链接频道信号、收发计算机组广播，并把数据输出到显示链接。
+在电脑界面里把积木拖成程序，就能控制齿轮箱与转速控制器、收发无线红石、
+查询物流网络并让打包机发货、向聊天框与局域网/互联网广播、播放音效与音乐、
+在无线显示器上写字，以及读取航空学导航台的坐标与方位。
 '''
 
 [[mixins]]
@@ -34,5 +36,13 @@ config="${mod_id}.mixins.json"
     modId="create"
     type="required"
     versionRange="[6.0.10,6.1.0)"
+    ordering="NONE"
+    side="BOTH"
+
+# CB打字机 直接继承 Create Simulated 的联动打字机，缺少该模组时无法注册方块
+[[dependencies.${mod_id}]]
+    modId="simulated"
+    type="required"
+    versionRange="[1.3.2,)"
     ordering="NONE"
     side="BOTH"
