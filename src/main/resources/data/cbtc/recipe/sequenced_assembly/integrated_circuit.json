@@ -1,0 +1,160 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "cbtc:lapis_sheet"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:lapis_sheet"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:redstone"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:redstone"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:redstone"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:gold_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:gold_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "minecraft:gold_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lapis_sheet"
+        },
+        {
+          "item": "create:polished_rose_quartz"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lapis_sheet"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "chance": 80.0,
+      "id": "cbtc:integrated_circuit"
+    },
+    {
+      "chance": 20.0,
+      "id": "cbtc:lapis_sheet"
+    }
+  ]
+}

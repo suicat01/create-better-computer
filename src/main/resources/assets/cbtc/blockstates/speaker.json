@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "cbtc:block/speaker" },
+    "facing=east": { "model": "cbtc:block/speaker", "y": 90 },
+    "facing=south": { "model": "cbtc:block/speaker", "y": 180 },
+    "facing=west": { "model": "cbtc:block/speaker", "y": 270 }
+  }
+}

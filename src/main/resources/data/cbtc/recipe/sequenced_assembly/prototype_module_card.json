@@ -1,0 +1,134 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:brass_sheet"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "create:brass_sheet"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "create:transmitter"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "create:copper_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "create:copper_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "create:copper_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "cbtc:blaze_compute_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "minecraft:redstone"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:prototype_module_card",
+      "chance": 0.78
+    },
+    {
+      "id": "create:brass_sheet",
+      "chance": 0.22
+    }
+  ]
+}

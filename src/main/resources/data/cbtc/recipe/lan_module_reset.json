@@ -1,0 +1,11 @@
+﻿{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "cbtc:lan_module" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "cbtc:lan_module"
+  }
+}

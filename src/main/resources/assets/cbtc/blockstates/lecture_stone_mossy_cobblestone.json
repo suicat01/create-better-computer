@@ -1,0 +1,8 @@
+﻿{
+  "variants": {
+    "facing=north": { "model": "cbtc:block/lecture_stone_mossy_cobblestone" },
+    "facing=east": { "model": "cbtc:block/lecture_stone_mossy_cobblestone", "y": 90 },
+    "facing=south": { "model": "cbtc:block/lecture_stone_mossy_cobblestone", "y": 180 },
+    "facing=west": { "model": "cbtc:block/lecture_stone_mossy_cobblestone", "y": 270 }
+  }
+}

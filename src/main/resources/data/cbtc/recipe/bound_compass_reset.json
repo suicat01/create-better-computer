@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "cbtc:bound_compass" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "minecraft:compass"
+  }
+}

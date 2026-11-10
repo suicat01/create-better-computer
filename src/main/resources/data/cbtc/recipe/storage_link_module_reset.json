@@ -1,0 +1,11 @@
+﻿{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "cbtc:storage_link_module" }
+  ],
+  "result": {
+    "count": 1,
+    "id": "cbtc:storage_link_module"
+  }
+}

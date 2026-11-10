@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "cbtc:super_blaze_rod"
+    }
+  ],
+  "result": {
+    "id": "cbtc:super_blaze_powder",
+    "count": 2
+  }
+}

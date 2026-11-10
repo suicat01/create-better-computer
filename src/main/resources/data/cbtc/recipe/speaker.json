@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": { "item": "create:brass_ingot" },
+    "B": { "item": "minecraft:note_block" },
+    "C": { "item": "cbtc:allay_sound_card" }
+  },
+  "pattern": [
+    "ABA",
+    "BCB",
+    "ABA"
+  ],
+  "result": {
+    "id": "cbtc:speaker",
+    "count": 1
+  }
+}

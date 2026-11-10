@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "cbtc:block/expander" },
+    "facing=east": { "model": "cbtc:block/expander", "y": 90 },
+    "facing=south": { "model": "cbtc:block/expander", "y": 180 },
+    "facing=west": { "model": "cbtc:block/expander", "y": 270 }
+  }
+}

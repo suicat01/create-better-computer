@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "facing=north,running=false,frame=0": { "model": "cbtc:block/computer", "y": 180 },
+    "facing=east,running=false,frame=0": { "model": "cbtc:block/computer", "y": 270 },
+    "facing=south,running=false,frame=0": { "model": "cbtc:block/computer" },
+    "facing=west,running=false,frame=0": { "model": "cbtc:block/computer", "y": 90 },
+    "facing=north,running=false,frame=1": { "model": "cbtc:block/computer", "y": 180 },
+    "facing=east,running=false,frame=1": { "model": "cbtc:block/computer", "y": 270 },
+    "facing=south,running=false,frame=1": { "model": "cbtc:block/computer" },
+    "facing=west,running=false,frame=1": { "model": "cbtc:block/computer", "y": 90 },
+
+    "facing=north,running=true,frame=0": { "model": "cbtc:block/computer_on_0", "y": 180 },
+    "facing=east,running=true,frame=0": { "model": "cbtc:block/computer_on_0", "y": 270 },
+    "facing=south,running=true,frame=0": { "model": "cbtc:block/computer_on_0" },
+    "facing=west,running=true,frame=0": { "model": "cbtc:block/computer_on_0", "y": 90 },
+    "facing=north,running=true,frame=1": { "model": "cbtc:block/computer_on_1", "y": 180 },
+    "facing=east,running=true,frame=1": { "model": "cbtc:block/computer_on_1", "y": 270 },
+    "facing=south,running=true,frame=1": { "model": "cbtc:block/computer_on_1" },
+    "facing=west,running=true,frame=1": { "model": "cbtc:block/computer_on_1", "y": 90 }
+  }
+}

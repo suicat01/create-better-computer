@@ -1,0 +1,124 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "minecraft:lodestone"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "minecraft:lodestone"
+  },
+  "sequence": [
+    {
+      "type": "create:cutting",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:cutting",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        },
+        {
+          "item": "minecraft:string"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        },
+        {
+          "item": "minecraft:string"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        },
+        {
+          "item": "minecraft:string"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        },
+        {
+          "item": "minecraft:string"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "minecraft:lodestone"
+        },
+        {
+          "item": "minecraft:leather"
+        }
+      ],
+      "results": [
+        {
+          "id": "minecraft:lodestone"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:lodestone_charm",
+      "count": 4
+    }
+  ]
+}

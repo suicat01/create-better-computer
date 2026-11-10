@@ -1,0 +1,27 @@
+{
+  "parent": "cbtc:root",
+  "display": {
+    "icon": {
+      "id": "cbtc:super_blaze_rod"
+    },
+    "title": {
+      "translate": "advancements.cbtc.not_super_burning.title"
+    },
+    "description": {
+      "translate": "advancements.cbtc.not_super_burning.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "kill_super_blaze": {
+      "trigger": "minecraft:player_killed_entity",
+      "conditions": {
+        "entity": {
+          "type": "cbtc:super_blaze"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:brass_hand"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "create:brass_hand"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_hand"
+        },
+        {
+          "item": "minecraft:nether_star"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_hand"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "chance": 70.0,
+      "id": "cbtc:uncharged_sculpting_hand"
+    },
+    {
+      "chance": 30.0,
+      "id": "create:brass_hand"
+    }
+  ]
+}

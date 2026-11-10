@@ -1,0 +1,21 @@
+{
+  "display": {
+    "icon": {
+      "id": "cbtc:computer"
+    },
+    "title": {
+      "translate": "advancements.cbtc.root.title"
+    },
+    "description": {
+      "translate": "advancements.cbtc.root.description"
+    },
+    "background": "minecraft:textures/gui/advancements/backgrounds/stone.png",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "tick": {
+      "trigger": "minecraft:tick"
+    }
+  }
+}

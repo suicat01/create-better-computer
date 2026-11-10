@@ -1,0 +1,20 @@
+{
+  "type": "create:crushing",
+  "ingredients": [
+    {
+      "item": "cbtc:super_blaze_rod"
+    }
+  ],
+  "processing_time": 200,
+  "results": [
+    {
+      "count": 3,
+      "id": "cbtc:super_blaze_powder"
+    },
+    {
+      "chance": 0.25,
+      "count": 3,
+      "id": "cbtc:super_blaze_powder"
+    }
+  ]
+}

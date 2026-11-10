@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "create:brass_casing"
+    },
+    {
+      "item": "create:electron_tube"
+    },
+    {
+      "item": "create:precision_mechanism"
+    },
+    {
+      "item": "create:cogwheel"
+    }
+  ],
+  "result": {
+    "id": "cbtc:speed_controller",
+    "count": 1
+  }
+}

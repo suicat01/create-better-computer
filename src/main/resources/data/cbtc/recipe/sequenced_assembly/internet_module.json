@@ -1,0 +1,50 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "cbtc:lan_module"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:lan_module"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lan_module"
+        },
+        {
+          "item": "cbtc:blaze_supercomputer_unit"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lan_module"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:lan_module"
+        },
+        {
+          "item": "cbtc:wireless_redstone_module"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:lan_module"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:internet_module",
+      "count": 1
+    }
+  ]
+}

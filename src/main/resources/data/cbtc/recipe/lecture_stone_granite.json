@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "S": { "item": "cbtc:speaker" },
+    "M": { "item": "minecraft:granite" }
+  },
+  "pattern": [
+    "MMM",
+    "MSM",
+    "MMM"
+  ],
+  "result": {
+    "id": "cbtc:lecture_stone_granite",
+    "count": 1
+  }
+}

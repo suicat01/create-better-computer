@@ -1,0 +1,38 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="suicat01"
+logoFile="logo.png"
+description='''
+CB电脑（Create: Better Computer）—— 一台基于机械动力的积木编程计算机。
+脚本可以发送机械动力红石链接频道信号、收发计算机组广播，并把数据输出到显示链接。
+'''
+
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[${neo_version},)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="create"
+    type="required"
+    versionRange="[6.0.10,6.1.0)"
+    ordering="NONE"
+    side="BOTH"

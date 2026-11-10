@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "cbtc:block/diagram_sensor"
+    }
+  }
+}

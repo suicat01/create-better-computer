@@ -1,0 +1,63 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:factory_gauge"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "create:factory_gauge"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:factory_gauge"
+        },
+        {
+          "item": "create:powdered_obsidian"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:factory_gauge"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:factory_gauge"
+        },
+        {
+          "item": "create:precision_mechanism"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:factory_gauge"
+        }
+      ]
+    },
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "create:factory_gauge"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:factory_gauge"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:gearbox_angle_tool",
+      "count": 1
+    }
+  ]
+}

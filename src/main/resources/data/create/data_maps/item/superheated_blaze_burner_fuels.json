@@ -1,0 +1,10 @@
+{
+  "values": {
+    "cbtc:super_blaze_rod": {
+      "burn_time": 3200
+    },
+    "cbtc:super_blaze_powder": {
+      "burn_time": 1600
+    }
+  }
+}

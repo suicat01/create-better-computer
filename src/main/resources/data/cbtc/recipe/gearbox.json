@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "create:sequenced_gearshift"
+    },
+    {
+      "item": "cbtc:integrated_circuit"
+    },
+    {
+      "item": "create:transmitter"
+    },
+    {
+      "item": "cbtc:blaze_compute_chip"
+    }
+  ],
+  "result": {
+    "id": "cbtc:gearbox",
+    "count": 1
+  }
+}

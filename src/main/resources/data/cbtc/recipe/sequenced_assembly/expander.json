@@ -1,0 +1,191 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:brass_casing"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "create:brass_casing"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "create:brass_block"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:cutting",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "minecraft:lightning_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "create:electron_tube"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_casing"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_casing"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:expander",
+      "count": 1
+    }
+  ]
+}

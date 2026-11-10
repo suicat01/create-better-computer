@@ -1,0 +1,130 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:brass_sheet"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "create:brass_sheet"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "cbtc:shulker_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "cbtc:shulker_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "minecraft:redstone"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "minecraft:gold_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "minecraft:gold_nugget"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:brass_sheet"
+        },
+        {
+          "item": "create:brass_sheet"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:brass_sheet"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:hard_drive",
+      "count": 1
+    }
+  ]
+}

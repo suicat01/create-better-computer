@@ -1,0 +1,43 @@
+{
+  "parent": "cbtc:root",
+  "display": {
+    "icon": {
+      "id": "cbtc:super_blaze_rod"
+    },
+    "title": {
+      "translate": "advancements.cbtc.same_root.title"
+    },
+    "description": {
+      "translate": "advancements.cbtc.same_root.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true
+  },
+  "criteria": {
+    "super_rod": {
+      "trigger": "minecraft:item_used_on_block",
+      "conditions": {
+        "location": [
+          {
+            "condition": "minecraft:location_check",
+            "predicate": {
+              "block": {
+                "blocks": [
+                  "create:blaze_burner",
+                  "create:lit_blaze_burner"
+                ]
+              }
+            }
+          },
+          {
+            "condition": "minecraft:match_tool",
+            "predicate": {
+              "items": "cbtc:super_blaze_rod"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

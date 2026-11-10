@@ -1,0 +1,50 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "cbtc:prototype_module_card"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:prototype_module_card"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "create:stock_ticker"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "cbtc:blaze_compute_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:storage_link_module",
+      "count": 1
+    }
+  ]
+}

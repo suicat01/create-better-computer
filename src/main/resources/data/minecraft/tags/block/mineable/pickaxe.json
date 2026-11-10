@@ -1,0 +1,21 @@
+{
+  "replace": false,
+  "values": [
+    "cbtc:computer",
+    "cbtc:expander",
+    "cbtc:typewriter",
+    "cbtc:gearbox",
+    "cbtc:diagram_sensor",
+    "cbtc:info_transmitter",
+    "cbtc:speed_controller",
+    "cbtc:lecture_stone",
+    "cbtc:lecture_stone_cobblestone",
+    "cbtc:lecture_stone_andesite",
+    "cbtc:lecture_stone_deepslate",
+    "cbtc:lecture_stone_stone_bricks",
+    "cbtc:lecture_stone_granite",
+    "cbtc:lecture_stone_mossy_cobblestone",
+    "cbtc:lecture_stone_mossy_stone_bricks",
+    "cbtc:lecture_stone_diorite"
+  ]
+}

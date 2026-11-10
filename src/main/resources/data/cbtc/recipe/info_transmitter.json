@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "ABA",
+    "BCB",
+    "ABA"
+  ],
+  "key": {
+    "A": {
+      "item": "create:brass_ingot"
+    },
+    "B": {
+      "item": "create:display_board"
+    },
+    "C": {
+      "item": "cbtc:blaze_compute_chip"
+    }
+  },
+  "result": {
+    "id": "cbtc:info_transmitter",
+    "count": 1
+  }
+}
