@@ -52,4 +52,4 @@ local-maven/         # DevLaunch 本地仓库
 
 ## 许可证
 
-All Rights Reserved
+MIT
