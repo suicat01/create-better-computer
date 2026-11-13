@@ -22,6 +22,10 @@ public enum PortKind {
     ANY;
 
     public boolean accepts(PortKind other) {
+        // 执行流只能接执行流，避免把流程线拖进数据口（ANY 槽也不例外）
+        if (this == FLOW || other == FLOW) {
+            return this == FLOW && other == FLOW;
+        }
         if (this == ANY || other == ANY) {
             return true;
         }
@@ -33,12 +37,12 @@ public enum PortKind {
         if (other == ANGLE) {
             return this == NUMBER || this == TEXT || this == SEQ;
         }
-        // 时间槽只收时间；时间输出可以接进文本槽（显示成带单位的文本）
+        // 时间槽只收时间；时间输出可以接进文本与数值槽（数值按游戏刻理解，便于直接用「计算」）
         if (this == TIME) {
             return other == TIME;
         }
         if (other == TIME) {
-            return this == TEXT;
+            return this == TEXT || this == NUMBER;
         }
         // 数列槽只收数列；数列的输出也能接进文本槽（显示成"数，数，数"）
         // 以及数值槽（比较时逐项判断，有一项满足即成立）

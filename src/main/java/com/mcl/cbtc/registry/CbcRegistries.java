@@ -38,6 +38,7 @@ public final class CbcRegistries {
                         output.accept(CbcBlocks.LECTURE_STONE_DIORITE.get());
                         output.accept(CbcBlocks.INFO_TRANSMITTER.get());
                         output.accept(CbcBlocks.SPEED_CONTROLLER.get());
+                        output.accept(CbcBlocks.ADVANCED_DISPLAY_LINK.get());
                         output.accept(CbcItems.STORAGE_LINK_MODULE.get());
                         output.accept(CbcItems.DISPLAY_LINK_MODULE.get());
                         output.accept(CbcItems.WIRELESS_REDSTONE_MODULE.get());

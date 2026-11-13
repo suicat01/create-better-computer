@@ -35,6 +35,10 @@ public class CbcClient {
             net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(
                     com.mcl.cbtc.registry.CbcBlocks.SPEED_CONTROLLER.get(),
                     net.minecraft.client.renderer.RenderType.cutout());
+            // 高级显示链接器的贴图同样带透明边缘
+            net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(
+                    com.mcl.cbtc.registry.CbcBlocks.ADVANCED_DISPLAY_LINK.get(),
+                    net.minecraft.client.renderer.RenderType.cutout());
         });
         CreateBetterComputer.LOGGER.info("CB电脑客户端初始化");
         // 绑定指南针沿用原版指南针的指针逻辑：按 LODESTONE_TRACKER 组件算角度驱动模型 overrides

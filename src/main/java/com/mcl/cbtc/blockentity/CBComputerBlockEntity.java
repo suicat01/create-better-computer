@@ -1098,22 +1098,11 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         if (text == null || text.isBlank()) {
             return Value.of("");
         }
-        String trimmed = text.trim();
-        try {
-            return Value.of(Double.parseDouble(trimmed));
-        } catch (NumberFormatException ignored) {
-            // 继续尝试剥离标签和单位
-        }
-        var matcher = java.util.regex.Pattern.compile("^[^0-9+\\-]*([+\\-]?[0-9]+(?:\\.[0-9]+)?)[^0-9]*$")
-                .matcher(trimmed);
-        if (matcher.matches()) {
-            try {
-                return Value.of(Double.parseDouble(matcher.group(1)));
-            } catch (NumberFormatException ignored) {
-                // 落到文本
-            }
-        }
-        return Value.of(text);
+        // 标签 + 数字 + 单位的写法解析成带单位的数值（"转速 120 RPM" → 120，单位 RPM），
+        // 解析不了（多个数字、时间格式等）仍按文本返回
+        com.mcl.cbtc.core.Amounts.Parsed parsed = com.mcl.cbtc.core.Amounts.parse(text);
+        return parsed == null ? Value.of(text)
+                : new Value.Num(parsed.value(), false, parsed.unit());
     }
 
     /**

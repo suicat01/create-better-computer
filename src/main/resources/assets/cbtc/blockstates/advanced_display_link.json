@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "facing=down,powered=false": { "model": "cbtc:block/advanced_display_link", "x": 180 },
+    "facing=down,powered=true": { "model": "cbtc:block/advanced_display_link", "x": 180 },
+    "facing=east,powered=false": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 90 },
+    "facing=east,powered=true": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 90 },
+    "facing=north,powered=false": { "model": "cbtc:block/advanced_display_link", "x": 90 },
+    "facing=north,powered=true": { "model": "cbtc:block/advanced_display_link", "x": 90 },
+    "facing=south,powered=false": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 180 },
+    "facing=south,powered=true": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 180 },
+    "facing=up,powered=false": { "model": "cbtc:block/advanced_display_link" },
+    "facing=up,powered=true": { "model": "cbtc:block/advanced_display_link" },
+    "facing=west,powered=false": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 270 },
+    "facing=west,powered=true": { "model": "cbtc:block/advanced_display_link", "x": 90, "y": 270 }
+  }
+}

@@ -122,6 +122,16 @@ public final class CbcBlocks {
                             .requiresCorrectToolForDrops()
                             .noOcclusion()));
 
+    /** 高级显示链接器：与原版显示链接器一致，但每刻自动刷新，无需高频红石信号。 */
+    public static final DeferredBlock<com.mcl.cbtc.block.AdvancedDisplayLinkBlock> ADVANCED_DISPLAY_LINK =
+            BLOCKS.register("advanced_display_link",
+                    () -> new com.mcl.cbtc.block.AdvancedDisplayLinkBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(2.0F, 6.0F)
+                            .sound(SoundType.METAL)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()));
+
     private static DeferredBlock<com.mcl.cbtc.block.LectureStoneBlock> lectureStoneVariant(String id) {
         return BLOCKS.register(id,
                 () -> new com.mcl.cbtc.block.LectureStoneBlock(BlockBehaviour.Properties.of()

@@ -80,6 +80,13 @@ public final class CbcBlockEntities {
                             CbcBlocks.SPEED_CONTROLLER.get())
                     .build(null));
 
+    /** 高级显示链接器：沿用原版显示链接器的方块实体，仅覆写每刻刷新。 */
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<com.mcl.cbtc.blockentity.AdvancedDisplayLinkBlockEntity>> ADVANCED_DISPLAY_LINK =
+            TYPES.register("advanced_display_link", () -> BlockEntityType.Builder
+                    .of(com.mcl.cbtc.blockentity.AdvancedDisplayLinkBlockEntity::new,
+                            CbcBlocks.ADVANCED_DISPLAY_LINK.get())
+                    .build(null));
+
     private CbcBlockEntities() {
     }
 

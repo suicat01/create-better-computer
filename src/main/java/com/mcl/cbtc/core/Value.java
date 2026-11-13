@@ -39,8 +39,8 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             case 1 -> new Bool(tag.getBoolean("V"));
             case 2 -> new Str(tag.getString("V"));
             case 3 -> new Seq(readSeq(tag));
-            case 4 -> new Time(tag.getLong("G"), tag.getLong("R"));
-            default -> new Num(tag.getDouble("V"));
+            case 4 -> new Time(tag.getLong("G"), tag.getLong("R"), tag.getString("U"));
+            default -> new Num(tag.getDouble("V"), false, tag.getString("U"));
         };
     }
 
@@ -54,9 +54,19 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
         return items;
     }
 
-    record Num(double v, boolean percent) implements Value {
+    /**
+     * 数值。
+     * <p>
+     * {@code unit} 是从"带单位的文本"里取出来的单位后缀（RPM、度、% 等），
+     * 只用于显示与加减乘除的传播；{@code percent} 为真时 {@code v} 存的是 0~1 的比例，显示时乘 100。
+     */
+    record Num(double v, boolean percent, String unit) implements Value {
         public Num(double v) {
-            this(v, false);
+            this(v, false, "");
+        }
+
+        public Num(double v, boolean percent) {
+            this(v, percent, "");
         }
 
         @Override
@@ -72,14 +82,24 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
         @Override
         public String asText() {
             double shown = percent ? v * 100 : v;
-            return (shown == Math.rint(shown) && !Double.isInfinite(shown)
-                    ? Long.toString((long) shown) : Double.toString(shown)) + (percent ? "%" : "");
+            String number = shown == Math.rint(shown) && !Double.isInfinite(shown)
+                    ? Long.toString((long) shown) : Double.toString(shown);
+            String suffix = unit == null ? "" : unit;
+            // 英文字母开头的单位（RPM、kFE）补一个空格，中文单位与符号（度、%）直接贴上去
+            if (!suffix.isEmpty() && suffix.charAt(0) < 128
+                    && Character.isLetterOrDigit(suffix.charAt(0))) {
+                suffix = " " + suffix;
+            }
+            return number + (percent ? "%" : "") + suffix;
         }
 
         @Override
         public void save(CompoundTag tag) {
             tag.putByte("T", (byte) 0);
             tag.putDouble("V", v);
+            if (unit != null && !unit.isEmpty()) {
+                tag.putString("U", unit);
+            }
         }
     }
 
@@ -184,7 +204,10 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
      * 现实时间以秒为单位。两个分量互不相干，只有当运算/比较双方都只用其中一个分量时才成立；
      * 相差一个分量时按"时间差"处理，直接输出差值。
      */
-    record Time(long gameTicks, long realSeconds) implements Value {
+    record Time(long gameTicks, long realSeconds, String unit) implements Value {
+        public Time(long gameTicks, long realSeconds) {
+            this(gameTicks, realSeconds, "");
+        }
         /** 是否是时间差（任一分量为负或以差值形式存在）。 */
         @Override
         public double asNumber() {
@@ -217,6 +240,9 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             tag.putByte("T", (byte) 4);
             tag.putLong("G", gameTicks);
             tag.putLong("R", realSeconds);
+            if (unit != null && !unit.isEmpty()) {
+                tag.putString("U", unit);
+            }
         }
     }
 

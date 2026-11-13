@@ -40,6 +40,12 @@ public final class CbcItems {
     public static final DeferredItem<BlockItem> SPEED_CONTROLLER =
             ITEMS.registerSimpleBlockItem(CbcBlocks.SPEED_CONTROLLER);
 
+    /** 高级显示链接器的物品：复用原版显示链接器物品的放置与选目标行为。 */
+    public static final DeferredItem<com.simibubi.create.content.redstone.displayLink.DisplayLinkBlockItem> ADVANCED_DISPLAY_LINK =
+            ITEMS.register("advanced_display_link",
+                    () -> new com.simibubi.create.content.redstone.displayLink.DisplayLinkBlockItem(
+                            CbcBlocks.ADVANCED_DISPLAY_LINK.get(), new Item.Properties()));
+
     public static final DeferredItem<com.mcl.cbtc.item.BlockEntityCarrierItem> SPEAKER =
             ITEMS.register("speaker", () -> new com.mcl.cbtc.item.BlockEntityCarrierItem(
                     CbcBlocks.SPEAKER.get(), CbcBlockEntities.SPEAKER::get,

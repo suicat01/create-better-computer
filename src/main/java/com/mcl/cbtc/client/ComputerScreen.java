@@ -808,8 +808,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
-        if ("time_write".equals(type.id())) {
-            // 书写时间：数值框 + 单位选择器
+        if ("time_write".equals(type.id()) || "time_duration".equals(type.id())) {
+            // 书写时间 / 书写计时：数值框 + 单位选择器
             cursor = addSlot(n, layout.headerItems, cursor, "amount", depth + 1);
             addParam(n, layout.headerItems, cursor, type.paramIndex("unit"));
             finishHeader(n, layout, depth);
@@ -976,6 +976,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("math_abs".equals(type.id()) || "math_negate".equals(type.id())
                 || "math_scientific".equals(type.id())) {
             buildMathUnaryHeader(n, layout, cursor, depth);
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("math_root".equals(type.id())) {
+            // 次方根 [开方数]，次数 [次数]
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_root_head"));
+            cursor = addSlot(n, layout.headerItems, cursor, "value", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_root_mid"));
+            addSlot(n, layout.headerItems, cursor, "degree", depth + 1);
             finishHeader(n, layout, depth);
             return;
         }
@@ -3638,6 +3647,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if (("time_write".equals(typeId) || "time_current".equals(typeId)) && "unit".equals(key)) {
             return timeUnitChoices();
         }
+        // 书写计时只关心"多长"，单位给刻 / 秒 / 分三个就够
+        if ("time_duration".equals(typeId) && "unit".equals(key)) {
+            return new String[]{tr("cbtc.gui.unit_tick"), tr("cbtc.gui.unit_second"), tr("cbtc.gui.unit_minute")};
+        }
         if (("nav_table_pos".equals(typeId) || "nav_table_target".equals(typeId)
                 || "target_locator_pos".equals(typeId) || "target_locator_set".equals(typeId))
                 && "axis".equals(key)) {
@@ -3662,7 +3675,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             case "time_math" -> new String[]{"+", "-"};
             case "time_compare" -> compareChoices();
             case "compare" -> compareChoices();
-            case "math" -> new String[]{"+", "-", "×", "÷", "^"};
+            case "math" -> new String[]{"+", "-", "×", "÷", "mod", "^"};
             case "logic" -> logicChoices();
             case "redstone_receive_compare" -> compareChoices();
             case "redstone_received_compare" -> compareChoices();

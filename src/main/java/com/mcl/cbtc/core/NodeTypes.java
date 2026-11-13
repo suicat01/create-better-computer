@@ -375,6 +375,18 @@ public final class NodeTypes {
             List.of(new NodeType.Port("value", PortKind.TEXT)),
             List.of("value"), List.of("0"));
 
+    /**
+     * 次方根：求数值的指定次数方根，产出数值。
+     * <p>
+     * value 是开方数，degree 是次数（2 就是平方根，3 是立方根）。
+     * 负数只有奇次根有实数解，偶次根与次数为 0 的情况一律输出 0。
+     */
+    public static final NodeType MATH_ROOT = add("math_root", NodeCategory.DATA,
+            List.of(new NodeType.Port("value", PortKind.NUMBER),
+                    new NodeType.Port("degree", PortKind.NUMBER)),
+            List.of(new NodeType.Port("value", PortKind.NUMBER)),
+            List.of("value", "degree"), List.of("0", "2"));
+
     // ---------------------------------------------------------------- 数列
     // 数列跟变量一样：积木自带一个名字，直接按名字改那条数列，不需要连线传递。
     // 本机（运行内存）/ 硬盘 / 局域网 / 互联网各一套命名空间，所以每种操作都有四块对应积木。
@@ -550,9 +562,14 @@ public final class NodeTypes {
             List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
             List.of("device"), List.of(""));
 
-    /** 角度运算：两个角度做四则运算，结果按圆周归一。两个口只接受角度积木。 */
+    /**
+     * 角度运算：两个角度做四则运算，结果按圆周归一。
+     * <p>
+     * 左边必须是角度，右边可以是角度，也可以是普通数字（数值口同时接受角度），
+     * 这样「角度 × 2」「角度 ÷ 4」这类倍数运算可以直接接数字积木。
+     */
     public static final NodeType ANGLE_MATH = add("angle_math", NodeCategory.DATA,
-            List.of(new NodeType.Port("a", PortKind.ANGLE), new NodeType.Port("b", PortKind.ANGLE)),
+            List.of(new NodeType.Port("a", PortKind.ANGLE), new NodeType.Port("b", PortKind.NUMBER)),
             List.of(new NodeType.Port("value", PortKind.ANGLE)),
             List.of("op"), List.of("+"));
 
@@ -585,6 +602,16 @@ public final class NodeTypes {
             List.of(new NodeType.Port("a", PortKind.TIME), new NodeType.Port("b", PortKind.TIME)),
             List.of(new NodeType.Port("value", PortKind.TIME)),
             List.of("op"), List.of("+"));
+
+    /**
+     * 书写计时：数值 + 单位，换算成刻数输出（带"刻"单位）。
+     * <p>
+     * 专门给等待、红石发射时长这类"按刻计时"的槽位用，和输出时间点的「书写时间」区分开。
+     */
+    public static final NodeType TIME_DURATION = add("time_duration", NodeCategory.DATA,
+            List.of(new NodeType.Port("amount", PortKind.NUMBER)),
+            List.of(new NodeType.Port("value", PortKind.NUMBER)),
+            List.of("amount", "unit"), List.of("0", "秒"));
 
     /** 时间比较：两个时间点比先后，产出条件。 */
     public static final NodeType TIME_COMPARE = add("time_compare", NodeCategory.DATA,

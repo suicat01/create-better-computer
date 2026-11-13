@@ -754,7 +754,7 @@ public final class ProgramVM {
             }
             case "wait_seconds" -> {
                 // 参数直接按刻计；接入时间积木时它已经换算好，填数字也当作刻
-                int ticks = (int) Math.round(Math.max(0, Math.min(72000, numberOrParam(node, "seconds"))));
+                int ticks = (int) Math.round(Math.max(0, Math.min(72000, tickOrParam(node, "seconds"))));
                 if (ticks <= 0) {
                     return "exec";
                 }
@@ -1027,9 +1027,9 @@ public final class ProgramVM {
             case "redstone_send" -> {
                 host.sendWirelessRedstone(node.param("channel"), node.param("channel2"),
                         node.param("mode"),
-                        (int) Math.max(1, Math.min(72000, numberOrParam(node, "phase"))),
-                        (int) Math.max(0, Math.min(72000, numberOrParam(node, "gap"))),
-                        (int) Math.max(1, Math.min(72000, numberOrParam(node, "lit"))),
+                        (int) Math.max(1, Math.min(72000, tickOrParam(node, "phase"))),
+                        (int) Math.max(0, Math.min(72000, tickOrParam(node, "gap"))),
+                        (int) Math.max(1, Math.min(72000, tickOrParam(node, "lit"))),
                         (int) Math.max(0, Math.min(15, numberOrParam(node, "strength"))));
                 return "exec";
             }
@@ -1134,7 +1134,7 @@ public final class ProgramVM {
             return Value.ZERO;
         }
         return switch (type.id()) {
-            case "const_number" -> Value.of(parseDouble(source.param("value")));
+            case "const_number" -> com.mcl.cbtc.core.Amounts.num(source.param("value"));
             case "const_text" -> Value.of(source.param("value"));
             case "text_join" -> Value.of(joinText(source, depth));
             case "warehouse_free_space" -> Value.of(host.warehouseFreeSpace());
@@ -1169,6 +1169,9 @@ public final class ProgramVM {
             case "math_abs" -> Value.of(Math.abs(numberOrParam(source, "value")));
             case "math_negate" -> Value.of(-numberOrParam(source, "value"));
             case "math_scientific" -> Value.of(scientificNotation(numberOrParam(source, "value")));
+            // 次方根：开方数 与 次数 都能填或嵌
+            case "math_root" -> Value.of(nthRoot(numberOrParam(source, "value"),
+                    numberOrParam(source, "degree")));
             // ---------------------------------------------------------------- 数列
             // 统计类：按名字取那条数列，再算数量 / 总和 / 平均值 / 文本
             case "seq_mem_count" -> Value.of(readSeq("mem", "", source.param("name").trim()).size());
@@ -1239,8 +1242,8 @@ public final class ProgramVM {
                     && bearingInRange(host.readNavTable(source.param("device_a"), "bearing"),
                             numberOrParam(source, "min"), numberOrParam(source, "max")));
             // 角度常量的数字框既可填也可嵌：没接线时读参数，接线时取嵌入积木的值
-            case "angle_value" -> Value.of(wrapAngle(numberOrParam(source, "amount")));
-            case "gearbox_angle" -> Value.of(host.gearboxAngle(source.param("device")));
+            case "angle_value" -> new Value.Num(wrapAngle(numberOrParam(source, "amount")), false, "°");
+            case "gearbox_angle" -> new Value.Num(host.gearboxAngle(source.param("device")), false, "°");
             case "speed_controller_get" -> Value.of(
                     Math.abs(host.speedControllerSpeed(source.param("device"))));
             case "angle_math" -> angleMathChain(source, depth);
@@ -1252,6 +1255,7 @@ public final class ProgramVM {
             case "time_write" -> Value.of(timeWrite(source));
             case "time_current" -> Value.of(currentTime(source.param("unit")));
             case "time_math" -> timeMathChain(source, depth);
+            case "time_duration" -> durationValue(source);
             case "time_compare" -> Value.of(timeCompare(source.param("op"),
                     timeOf(eval(source, "a", depth)), timeOf(eval(source, "b", depth))));
             case "music_song_name" -> host.musicState(source.param("device"), "song");
@@ -1338,8 +1342,70 @@ public final class ProgramVM {
     }
 
 
+    /** 按刻计的参数：接的是带时间单位的数值时换算成刻，没接线时读槽位里填的刻数。 */
+    private double tickOrParam(Node node, String port) {
+        if (program.wiresTo(node.id(), port).isEmpty()) {
+            return parseDouble(node.param(port));
+        }
+        return durationTicks(eval(node, port, EVAL_DEPTH));
+    }
+
     /**
-     * 书写时间：把"数值 + 单位"换算成时间点。
+     * 把带时间单位的数值换算成刻。
+     * <p>
+     * 只认 刻 / 秒 / 分 三种（书写计时的可选单位，含各语言写法）；
+     * 没有单位或单位不认识时按原数（当作刻）处理。
+     */
+    private static double durationTicks(Value value) {
+        double number = value.asNumber();
+        if (!(value instanceof Value.Num num) || num.unit() == null) {
+            return number;
+        }
+        return switch (num.unit().trim()) {
+            case "刻", "tick", "ティック", "틱", "тик" -> number;
+            case "秒", "second", "초", "секунда" -> number * 20;
+            case "分", "minute", "분", "минута" -> number * 1200;
+            default -> number;
+        };
+    }
+
+    /**
+     * 书写计时：输出"数值 + 所选单位"，不折算成刻。
+     * <p>
+     * 等待、红石发射时长这些按刻计的参数，会在接收端用 {@link #durationTicks} 换算。
+     */
+    private Value durationValue(Node node) {
+        return new Value.Num(numberOrParam(node, "amount"), false, node.param("unit").trim());
+    }
+
+    /** 一个单位等于多少刻：1 秒 = 20 刻，1 分 = 1200 刻，以此类推。 */
+    private static double ticksPerUnit(String unit) {
+        return switch (unit) {
+            case "刻", "tick", "游戏刻" -> 1;
+            case "游戏分", "game_minute" -> 20;
+            case "游戏时", "game_hour" -> 1000;
+            case "游戏日", "game_day" -> 24000;
+            case "分", "minute" -> 60 * 20;
+            case "时", "hour" -> 60 * 60 * 20;
+            case "现实日", "real_day" -> 86400 * 20;
+            case "现实年", "real_year" -> 365D * 86400D * 20D;
+            default -> 20; // 秒
+        };
+    }
+
+    /** 一个现实类单位等于多少现实秒。 */
+    private static double secondsPerUnit(String unit) {
+        return switch (unit) {
+            case "现实年", "real_year" -> 365D * 86400D;
+            case "现实日", "real_day" -> 86400D;
+            case "现实时", "real_hour" -> 3600D;
+            case "现实分", "real_minute" -> 60D;
+            default -> 1D;
+        };
+    }
+
+    /**
+     * 书写时间：把"数值 + 单位"换算成时间点，并记下写入时的单位。
      * <p>
      * 游戏类单位换算成游戏刻，现实类单位换算成现实秒，两者分别存进各自分量。
      */
@@ -1357,7 +1423,7 @@ public final class ProgramVM {
             case "现实分", "real_minute" -> real = Math.round(amount * 60L);
             default -> real = Math.round(amount);
         }
-        return new Value.Time(game, real);
+        return new Value.Time(game, real, node.param("unit").trim());
     }
 
     /**
@@ -1382,7 +1448,7 @@ public final class ProgramVM {
             case "现实分", "real_minute" -> real = now.toLocalTime().toSecondOfDay();
             default -> real = now.toLocalTime().toSecondOfDay();
         }
-        return new Value.Time(game, real);
+        return new Value.Time(game, real, unit.trim());
     }
 
     /**
@@ -1400,7 +1466,8 @@ public final class ProgramVM {
         boolean subtract = "-".equals(op) || "－".equals(op);
         long game = subtract ? a.gameTicks() - b.gameTicks() : a.gameTicks() + b.gameTicks();
         long real = subtract ? a.realSeconds() - b.realSeconds() : a.realSeconds() + b.realSeconds();
-        return new Value.Time(game, real);
+        // 两边单位一致时保留单位，方便结果直接进「计算」时按原单位显示
+        return new Value.Time(game, real, a.unit().equals(b.unit()) ? a.unit() : "");
     }
 
     /** 时间比较：先比游戏分量，游戏分量相同时再比现实分量。 */
@@ -1642,16 +1709,138 @@ public final class ProgramVM {
         }
     }
 
-    /** 计算：一个数 运算符 另一个数。 */
+    /**
+     * 计算：一个数 运算符 另一个数。时间与角度各用自己的运算积木。
+     * <p>
+     * 运算对象带单位时结果尽量保留单位：加减沿用一致的单位（一边没单位就沿用另一边的），
+     * 乘除在只有一边带单位时保留它；两边都带单位、取模、乘方时丢弃。
+     */
     private Value mathChain(Node node, int depth) {
-        return math(node.param("op"), eval(node, "a", depth).asNumber(),
-                eval(node, "b", depth).asNumber());
+        String op = node.param("op");
+        Value.Num a = asNum(eval(node, "a", depth));
+        Value.Num b = asNum(eval(node, "b", depth));
+        Value result = safeMath(op, a.asNumber(), b.asNumber());
+        if (result == Value.ZERO) {
+            return result;
+        }
+        return new Value.Num(result.asNumber(), false, resultUnit(op, a.unit(), b.unit()));
     }
 
-    /** 角度运算：结果按圆周归一。 */
+    /** 把任意值当成带单位的数值：文本按"标签+数字+单位"解析，解析不了按 0。 */
+    private static Value.Num asNum(Value value) {
+        if (value instanceof Value.Num num) {
+            return num;
+        }
+        if (value instanceof Value.Str text) {
+            com.mcl.cbtc.core.Amounts.Parsed parsed = com.mcl.cbtc.core.Amounts.parse(text.v());
+            return parsed == null ? new Value.Num(text.asNumber())
+                    : new Value.Num(parsed.value(), false, parsed.unit());
+        }
+        // 时间值进「计算」时按写入时的单位换算回去（5 游戏分 ÷ 2 → 2.5 游戏分）；
+        // 没记录单位时退回"刻 / 秒"
+        if (value instanceof Value.Time time) {
+            String unit = time.unit() == null ? "" : time.unit().trim();
+            if (time.gameTicks() == 0 && time.realSeconds() != 0) {
+                if (unit.isEmpty()) {
+                    return new Value.Num(time.realSeconds(), false, "秒");
+                }
+                return new Value.Num(time.realSeconds() / secondsPerUnit(unit), false, unit);
+            }
+            if (unit.isEmpty()) {
+                return new Value.Num(time.gameTicks(), false, "刻");
+            }
+            return new Value.Num(time.gameTicks() / ticksPerUnit(unit), false, unit);
+        }
+        return new Value.Num(value.asNumber());
+    }
+
+    /**
+     * 单位传播规则：
+     * 加减取一致的单位（一边没单位就沿用另一边的，不同单位则丢弃）；
+     * 乘除拼接成复合单位（{@code RPM × s → RPM·s}、{@code RPM ÷ s → RPM/s}），
+     * 两边单位相同时约简（{@code RPM × RPM → RPM²}、{@code RPM ÷ RPM → 无量纲}）；
+     * 取模与乘方不保留单位。
+     */
+    private static String resultUnit(String op, String a, String b) {
+        return switch (op) {
+            case "+", "-" -> {
+                if (a.isEmpty() || a.equals(b)) {
+                    yield b;
+                }
+                yield b.isEmpty() ? a : "";
+            }
+            case "*", "×" -> compoundMultiply(a, b);
+            case "/", "÷" -> compoundDivide(a, b);
+            default -> "";
+        };
+    }
+
+    /** 乘法单位：任意一边为空就取另一边，相同则平方，否则用"·"拼接。 */
+    private static String compoundMultiply(String a, String b) {
+        if (a.isEmpty()) {
+            return b;
+        }
+        if (b.isEmpty()) {
+            return a;
+        }
+        return a.equals(b) ? a + "²" : a + "·" + b;
+    }
+
+    /**
+     * 除法单位：除数为空保持不变，被除数为空写成 {@code /单位}；
+     * 单位相同时约掉，复合单位里正好含有除数那一项时把它消去。
+     */
+    private static String compoundDivide(String a, String b) {
+        if (b.isEmpty()) {
+            return a;
+        }
+        if (a.isEmpty()) {
+            return "/" + b;
+        }
+        if (a.equals(b)) {
+            return "";
+        }
+        String[] parts = a.split("·");
+        StringBuilder kept = new StringBuilder();
+        boolean removed = false;
+        for (String part : parts) {
+            if (!removed && part.equals(b)) {
+                removed = true;
+                continue;
+            }
+            // RPM² ÷ RPM 约成 RPM
+            if (!removed && part.equals(b + "²")) {
+                removed = true;
+                appendUnit(kept, b);
+                continue;
+            }
+            appendUnit(kept, part);
+        }
+        return removed ? kept.toString() : a + "/" + b;
+    }
+
+    /** 用"·"拼接单位片段，空片段跳过。 */
+    private static void appendUnit(StringBuilder sb, String part) {
+        if (part.isEmpty()) {
+            return;
+        }
+        if (sb.length() > 0) {
+            sb.append('·');
+        }
+        sb.append(part);
+    }
+
+    /** 四则运算；结果为 NaN 或无穷时按 0 处理，避免 NaN 顺着积木一路传下去。 */
+    private static Value safeMath(String op, double a, double b) {
+        Value result = math(op, a, b);
+        double number = result.asNumber();
+        return Double.isNaN(number) || Double.isInfinite(number) ? Value.ZERO : result;
+    }
+
+    /** 角度运算：结果按圆周归一，并保留"°"单位。 */
     private Value angleMathChain(Node node, int depth) {
-        return Value.of(angleMath(node.param("op"), eval(node, "a", depth).asNumber(),
-                eval(node, "b", depth).asNumber()));
+        return new Value.Num(angleMath(node.param("op"), eval(node, "a", depth).asNumber(),
+                eval(node, "b", depth).asNumber()), false, "°");
     }
 
     /** 时间运算：两个时间点做加减。 */
@@ -1685,7 +1874,8 @@ public final class ProgramVM {
             case "-" -> Value.of(a - b);
             case "*", "×" -> Value.of(a * b);
             case "/", "÷" -> Value.of(b == 0 ? 0 : a / b);
-            case "%" -> Value.of(b == 0 ? 0 : a % b);
+            // 取模：a 除以 b 的余数，例如 7 mod 3 = 1；除数为 0 时按 0 处理
+            case "%", "mod" -> Value.of(b == 0 ? 0 : a % b);
             // 乘方：a 的 b 次方。负数开分数次方会得到 NaN，按 0 处理
             case "^" -> {
                 double result = Math.pow(a, b);
@@ -1718,6 +1908,25 @@ public final class ProgramVM {
             shown = shown.substring(0, shown.length() - 2);
         }
         return (negative ? "-" : "") + shown + " * 10^" + exponent;
+    }
+
+    /**
+     * 次方根：value 的 degree 次方根。
+     * <p>
+     * 次数为 0、结果不是有限数时输出 0；负数只有奇次根有实数解，偶次根也输出 0。
+     */
+    private static double nthRoot(double value, double degree) {
+        if (degree == 0 || Double.isNaN(value) || Double.isNaN(degree)) {
+            return 0;
+        }
+        if (value < 0) {
+            double rounded = Math.rint(degree);
+            boolean oddDegree = Math.abs(degree - rounded) < 1e-9
+                    && ((long) Math.abs(rounded)) % 2 == 1;
+            return oddDegree ? -Math.pow(-value, 1.0 / degree) : 0;
+        }
+        double result = Math.pow(value, 1.0 / degree);
+        return Double.isNaN(result) || Double.isInfinite(result) ? 0 : result;
     }
 
     // ---------------------------------------------------------------- 随机数

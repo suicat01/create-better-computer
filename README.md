@@ -2,7 +2,7 @@
 
 一个基于 NeoForge 1.21.1 的机械动力（Create）附属模组：用积木搭程序的 **CB电脑**，附带拓展模块、外设绑定、无线红石、局域网 / 互联网通信、齿轮箱控制、无线显示、网络音乐与航空学联动。
 
-版本：1.0.1
+版本：1.0.2
 
 ## 能做什么
 
@@ -16,7 +16,7 @@
 
 1. 安装 NeoForge 21.1.228+（Minecraft 1.21.1）与 Java 21。
 2. 把前置模组放进 `mods/`：**Create 6.0.10**、**Create Aeronautics 1.3.2**、**Sable 2.0.6**。
-3. 把 `cbtc-1.0.1.jar` 放进 `mods/`。
+3. 把 `cbtc-1.0.2.jar` 放进 `mods/`。
 4. 可选：JEI（查看捏塑与配方）、Curios（磁石挂件放任意饰品槽）、网络音乐机（网络歌曲积木）。
 
 ## 文档
@@ -37,7 +37,7 @@ gradlew.bat build
 ./gradlew build
 ```
 
-构建产物位于 `build/libs/cbtc-1.0.1.jar`。
+构建产物位于 `build/libs/cbtc-1.0.2.jar`。
 
 ## 目录结构
 
