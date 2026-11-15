@@ -42,18 +42,44 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         super(properties);
     }
 
+    /**
+     * 右键方块时优先于方块自身的交互执行。
+     * <p>
+     * 有些方块（例如雷达轴承）会先吃掉右键（装配/打开界面），普通的 {@link #useOn} 根本收不到点击，
+     * 所以绑定逻辑必须放在这里；点到不是外设的方块时返回 PASS，方块照常响应。
+     */
+    @Override
+    public InteractionResult onItemUseFirst(ItemStack stack, UseOnContext context) {
+        if (context.getPlayer() == null) {
+            return InteractionResult.PASS;
+        }
+        if (target(context.getLevel(), context.getClickedPos()) == null) {
+            return InteractionResult.PASS;
+        }
+        return bindInteraction(context);
+    }
+
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Player player = context.getPlayer();
         if (player == null) {
             return InteractionResult.PASS;
         }
+        if (target(context.getLevel(), context.getClickedPos()) == null) {
+            return InteractionResult.FAIL;
+        }
+        return bindInteraction(context);
+    }
+
+    /** 选中 / 再次右键命名 / Shift 解绑的服务端流程。 */
+    private static InteractionResult bindInteraction(UseOnContext context) {
+        Player player = context.getPlayer();
         ItemStack stack = context.getItemInHand();
         Level level = context.getLevel();
         BlockPos clicked = context.getClickedPos();
         Binding target = target(level, clicked);
-        if (target == null) {
-            return InteractionResult.FAIL;
+        if (target == null || player == null) {
+            return InteractionResult.PASS;
         }
         // 绑定是服务端权威的行为，选中状态也只存服务端，避免客户端状态被同步覆盖
         if (level.isClientSide) {
@@ -108,7 +134,8 @@ public class DeviceModuleItem extends UpgradeModuleItem {
     private static Binding target(Level level, BlockPos clicked) {
         DeviceKind kind = com.mcl.cbtc.device.Devices.kindAt(level, clicked);
         if (kind == null || !bindable(kind)) {
-            com.mcl.cbtc.CreateBetterComputer.LOGGER.info("外设绑定：{} 不是可绑定外设，方块实体={}",
+            // 现在每次右键都会先走 onItemUseFirst，这行只留调试用，避免刷屏
+            com.mcl.cbtc.CreateBetterComputer.LOGGER.debug("外设绑定：{} 不是可绑定外设，方块实体={}",
                     clicked, level.getBlockEntity(clicked));
             return null;
         }
@@ -127,7 +154,7 @@ public class DeviceModuleItem extends UpgradeModuleItem {
     private static boolean bindable(DeviceKind kind) {
         return switch (kind) {
             case GEARBOX, SPEED_CONTROLLER, TYPEWRITER, SPEAKER, LECTURE_STONE, NAV_TABLE,
-                    INFO_TRANSMITTER -> true;
+                    NETWORK_CONTROLLER, SENTRY_ARM, INFO_TRANSMITTER -> true;
             default -> false;
         };
     }
@@ -186,6 +213,10 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         // 注册/刷新定位缓存，物理结构组装/拆卸时据此换算坐标
         com.mcl.cbtc.device.Devices.registerLocation(level, entry.getString("Id"), canonical, target.kind());
+        // 绑定哨戒动力臂即由电脑接管：关闭自动索敌，瞄准与射击交给积木
+        if (target.kind() == DeviceKind.SENTRY_ARM) {
+            com.mcl.cbtc.device.Devices.setSentryControlled(level, target.pos(), true);
+        }
     }
 
     /**
@@ -195,8 +226,22 @@ public class DeviceModuleItem extends UpgradeModuleItem {
      * 积木读写时经由模块所在的导航台找到那个物品。
      */
     public static boolean bindTargetLocator(ItemStack card, ItemStack module) {
-        String moduleId = TargetLocatorItem.ensureId(module);
-        if (moduleId.isBlank()) {
+        return bindItemDevice(card, TargetLocatorItem.ensureId(module), DeviceKind.TARGET_LOCATOR);
+    }
+
+    /** 工作台绑定：把瞄准组件登记到外设模块卡上，只记组件自己的稳定 ID。 */
+    public static boolean bindGunnerSight(ItemStack card, ItemStack module) {
+        return bindItemDevice(card, GunnerSightItem.ensureId(module), DeviceKind.GUNNER_SIGHT);
+    }
+
+    /** 工作台绑定：把枪式遥控器登记到外设模块卡上，只记遥控器自己的稳定 ID。 */
+    public static boolean bindGunRemote(ItemStack card, ItemStack module) {
+        return bindItemDevice(card, GunRemoteItem.ensureId(module), DeviceKind.GUN_REMOTE);
+    }
+
+    /** 物品型外设的公共绑定：卡里只记物品 ID 与种类，具体数据留在物品自己的 NBT 上。 */
+    private static boolean bindItemDevice(ItemStack card, String deviceId, DeviceKind kind) {
+        if (deviceId == null || deviceId.isBlank()) {
             return false;
         }
         CompoundTag tag = tag(card);
@@ -204,9 +249,9 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         int nextNumber = 1;
         for (int i = 0; i < entries.size(); i++) {
             CompoundTag entry = entries.getCompound(i);
-            if (DeviceKind.TARGET_LOCATOR.id().equals(entry.getString("Kind"))
-                    && moduleId.equals(entry.getString("Id"))) {
-                // 已经绑定过这个模块
+            if (kind.id().equals(entry.getString("Kind"))
+                    && deviceId.equals(entry.getString("Id"))) {
+                // 已经绑定过这个物品
                 return true;
             }
             if (entry.getInt("Number") >= nextNumber) {
@@ -214,10 +259,10 @@ public class DeviceModuleItem extends UpgradeModuleItem {
             }
         }
         CompoundTag entry = new CompoundTag();
-        entry.putString("Id", moduleId);
+        entry.putString("Id", deviceId);
         entry.putInt("Number", nextNumber);
-        entry.putString("Kind", DeviceKind.TARGET_LOCATOR.id());
-        entry.putString("Name", "未命名的" + DeviceKind.TARGET_LOCATOR.displayName()
+        entry.putString("Kind", kind.id());
+        entry.putString("Name", "未命名的" + kind.displayName()
                 + String.format("%03d", nextNumber));
         entries.add(entry);
         tag.put(DEVICES, entries);
@@ -295,6 +340,10 @@ public class DeviceModuleItem extends UpgradeModuleItem {
                     && sameDevice(level, compound, target.pos(), storePos, subLevelId);
             if (matches) {
                 com.mcl.cbtc.device.Devices.removeLocation(compound.getString("Id"));
+                // 解绑哨戒动力臂：恢复它自己的自动索敌与自动开火
+                if (target.kind() == DeviceKind.SENTRY_ARM) {
+                    com.mcl.cbtc.device.Devices.setSentryControlled(level, target.pos(), false);
+                }
             } else {
                 kept.add(compound);
             }
@@ -325,8 +374,9 @@ public class DeviceModuleItem extends UpgradeModuleItem {
             CompoundTag entry = entries.getCompound(i);
             String id = entry.getString("Id");
             DeviceKind kind = DeviceKind.byId(entry.getString("Kind"));
-            if (kind == DeviceKind.TARGET_LOCATOR) {
-                // 目标定位模块是物品而不是方块，只记模块 ID，坐标保存在模块自己的 NBT 里
+            if (kind == DeviceKind.TARGET_LOCATOR || kind == DeviceKind.GUNNER_SIGHT
+                    || kind == DeviceKind.GUN_REMOTE) {
+                // 目标定位模块、瞄准组件、枪式遥控器是物品而不是方块，只记物品 ID，数据保存在物品自己的 NBT 里
                 if (!id.isBlank()) {
                     result.add(new Device(id, entry.getString("Name"), kind,
                             level == null ? null : level.dimension().location(), BlockPos.ZERO, null));
@@ -466,6 +516,12 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         BlockPos storePos = loc == null ? pos : loc.pos();
         java.util.UUID subLevelId = loc == null ? null : loc.subLevelId();
         for (Device device : devices(stack)) {
+            // 物品型外设（目标定位模块、瞄准组件）没有方块坐标，也没有记录维度，不参与方块匹配
+            if (device.kind() == DeviceKind.TARGET_LOCATOR || device.kind() == DeviceKind.GUNNER_SIGHT
+                    || device.kind() == DeviceKind.GUN_REMOTE
+                    || device.dimension() == null) {
+                continue;
+            }
             if (device.dimension().equals(level.dimension().location())
                     && sameDevice(level, pos, storePos, subLevelId, device.pos(), device.subLevelId())) {
                 return device;
@@ -492,7 +548,6 @@ public class DeviceModuleItem extends UpgradeModuleItem {
                         .withStyle(ChatFormatting.GRAY));
             }
         }
-        tooltip.add(Component.translatable("item.cbtc.device_module.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static CompoundTag tag(ItemStack stack) {

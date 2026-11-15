@@ -57,17 +57,19 @@ public class CreateBetterComputer {
     private void commonSetup(FMLCommonSetupEvent event) {
         // 注册阶段结束后，把 CB电脑 方块挂到 Create 的显示数据源表上
         event.enqueueWork(CreateIntegration::bindBlocks);
-        // 装了饰品栏模组时把磁石挂件注册成饰品
+        // 装了饰品栏模组时把磁石挂件、枪炮手的瞄准组件注册成饰品
         event.enqueueWork(() -> {
             if (com.mcl.cbtc.compat.Curios.loaded()) {
                 com.mcl.cbtc.compat.CuriosCompat.registerCurio(
                         com.mcl.cbtc.registry.CbcItems.LODESTONE_CHARM.get());
+                com.mcl.cbtc.compat.CuriosCompat.registerCurio(
+                        com.mcl.cbtc.registry.CbcItems.GUNNER_SIGHT.get());
             }
         });
-        // 智能转速控制器的 Shift 概要只在客户端生效，服务端不加载相关类
+        // 所有物品的描述统一走机械动力原生的 Shift 概要界面，只在客户端生效
         event.enqueueWork(() -> {
             if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
-                com.mcl.cbtc.compat.SpeedControllerTooltip.register();
+                com.mcl.cbtc.compat.CreateTooltips.register();
             }
         });
         LOGGER.info("CB电脑已装载：积木编程模块初始化");

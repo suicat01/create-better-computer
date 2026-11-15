@@ -65,7 +65,6 @@ public class SculptingHandItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.cbtc.sculpting_hand.desc").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("item.cbtc.sculpting_hand.uses",
                 remainingUses(stack), MAX_USES).withStyle(ChatFormatting.AQUA));
     }

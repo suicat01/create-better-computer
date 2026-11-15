@@ -32,6 +32,10 @@ public enum DeviceKind {
     LECTURE_STONE("lecture_stone", "讲解石", List.of()),
     NAV_TABLE("nav_table", "导航台", List.of()),
     TARGET_LOCATOR("target_locator", "目标定位模块", List.of()),
+    NETWORK_CONTROLLER("network_controller", "网络控制器", List.of()),
+    GUNNER_SIGHT("gunner_sight", "枪炮手的瞄准组件", List.of()),
+    GUN_REMOTE("gun_remote", "枪式遥控器", List.of()),
+    SENTRY_ARM("sentry_arm", "火控单位", List.of()),
     INFO_TRANSMITTER("info_transmitter", "信息转发器", List.of());
 
     private final String id;
@@ -58,6 +62,10 @@ public enum DeviceKind {
 
     @Nullable
     public static DeviceKind byId(String id) {
+        // 兼容旧存档：雷达轴承的绑定记录迁移到网络控制器
+        if ("radar_bearing".equals(id)) {
+            return NETWORK_CONTROLLER;
+        }
         for (DeviceKind kind : values()) {
             if (kind.id.equals(id)) {
                 return kind;

@@ -1,0 +1,21 @@
+{
+  "description": {
+    "translate": "enchantment.cbtc.color_restore"
+  },
+  "supported_items": "cbtc:gunner_sight",
+  "primary_items": "cbtc:gunner_sight",
+  "weight": 10,
+  "max_level": 1,
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 0
+  },
+  "max_cost": {
+    "base": 30,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "head"
+  ]
+}

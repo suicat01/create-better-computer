@@ -73,7 +73,6 @@ public class TargetLocatorItem extends Item {
         } else {
             tooltip.add(Component.translatable("item.cbtc.target_locator.unset").withStyle(ChatFormatting.GRAY));
         }
-        tooltip.add(Component.translatable("item.cbtc.target_locator.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static String format(double value) {

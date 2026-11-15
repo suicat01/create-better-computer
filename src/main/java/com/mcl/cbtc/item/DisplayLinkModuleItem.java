@@ -417,7 +417,6 @@ public class DisplayLinkModuleItem extends UpgradeModuleItem {
                 tooltip.add(Component.literal("· " + device.name()).withStyle(ChatFormatting.GRAY));
             }
         }
-        tooltip.add(Component.translatable("item.cbtc.display_link_module.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static CompoundTag tag(ItemStack stack) {

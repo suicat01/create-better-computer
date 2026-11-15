@@ -201,24 +201,19 @@ public final class NodeTypes {
             List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
             List.of("device_a", "device_b", "direction", "device_gearbox"), List.of("", "", "前", ""));
 
-    /** 当打字机按下某键时：按下立刻触发一次，按住超过 0.2 秒后继续每刻连发（短按长按都响应）。 */
+    /** 当打字机按下某键时：只在按下那一刻触发一次，短按不会重复执行。 */
     public static final NodeType TYPEWRITER_KEY = add("typewriter_key", NodeCategory.EVENT,
             List.of(),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("device", "key"), List.of("", ""));
 
-    /** 当打字机长按某键时：按下后前 0.2 秒不响应，满 0.2 秒起每刻触发，松开即停。 */
-    public static final NodeType TYPEWRITER_LONG_PRESS = add("typewriter_long_press", NodeCategory.EVENT,
+    /** 当打字机按住某键时：按住期间每刻触发一次，松开即停，用于持续输出。 */
+    public static final NodeType TYPEWRITER_HELD = add("typewriter_held", NodeCategory.EVENT,
             List.of(),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("device", "key"), List.of("", ""));
 
-    /** 打字机按下中：该键正被按住且还没到长按阈值（0.2 秒），产出布尔。 */
-    public static final NodeType TYPEWRITER_KEY_DOWN = add("typewriter_key_down", NodeCategory.AERO,
-            List.of(), List.of(new NodeType.Port("value", PortKind.BOOL)),
-            List.of("device", "key"), List.of("", ""));
-
-    /** 打字机长按中：该键正被按住且已超过长按阈值（0.2 秒），产出布尔。 */
+    /** 打字机按键按住中：该键正被按住时产出布尔，纯状态位。 */
     public static final NodeType TYPEWRITER_KEY_HELD = add("typewriter_key_held", NodeCategory.AERO,
             List.of(), List.of(new NodeType.Port("value", PortKind.BOOL)),
             List.of("device", "key"), List.of("", ""));
@@ -240,6 +235,57 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("device"), List.of(""));
+
+    /**
+     * 雷达映射：把指定雷达扫描到的实体投到戴着指定瞄准组件的玩家屏幕上。
+     * <p>
+     * 视野内的实体会被方框圈住，离开视野后在屏幕边缘显示指向箭头；框只保留 2 秒，
+     * 所以这条积木要放进「重复执行」里持续刷新。
+     */
+    public static final NodeType RADAR_MAP = add("radar_map", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("radar", "sight"), List.of("", ""));
+
+    /**
+     * 哨戒动力臂瞄准：让动力臂瞄准指定瞄准组件佩戴者的准星。
+     * <p>
+     * 每次执行都刷新一次瞄准点，放进「重复执行」里就能跟着佩戴者的视线持续转动。
+     */
+    public static final NodeType SENTRY_AIM = add("sentry_aim", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sentry", "sight"), List.of("", ""));
+
+    /**
+     * 哨戒动力臂射击：每执行一次模拟一次扳机。
+     * <p>
+     * 点射/连发节奏由枪械自身的数据决定，积木只负责扣扳机。
+     */
+    public static final NodeType SENTRY_FIRE = add("sentry_fire", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sentry"), List.of(""));
+
+    /**
+     * 哨戒动力臂换弹：立即从动力臂的弹药箱里补满当前武器的弹匣。
+     * <p>
+     * 弹匣已满时什么也不做；没有匹配弹药时动力臂进入缺弹状态。
+     */
+    public static final NodeType SENTRY_RELOAD = add("sentry_reload", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sentry"), List.of(""));
+
+    /** 动力臂内可用弹药：弹药箱里与当前武器匹配的备用弹药总数（不含弹匣内已有的）。 */
+    public static final NodeType SENTRY_AMMO = add("sentry_ammo", NodeCategory.AERO,
+            List.of(), List.of(new NodeType.Port("value", PortKind.NUMBER)),
+            List.of("sentry"), List.of(""));
+
+    /** 动力臂武器弹匣内弹量：当前武器弹匣里剩余的子弹数。 */
+    public static final NodeType SENTRY_MAGAZINE = add("sentry_magazine", NodeCategory.AERO,
+            List.of(), List.of(new NodeType.Port("value", PortKind.NUMBER)),
+            List.of("sentry"), List.of(""));
 
     /**
      * 设置转速控制器：把智能转速控制器的输出转速与旋转方向设成指定值。
@@ -678,15 +724,25 @@ public final class NodeTypes {
             List.of("channel", "channel2", "op", "strength"),
             List.of("minecraft:redstone", "minecraft:redstone", ">=", "1"));
 
+    /** 发送频道信号：执行到的这一 tick 亮起，下一 tick 没再执行就熄灭（按住即持续发信）。 */
     public static final NodeType REDSTONE_SEND = add("redstone_send", NodeCategory.REDSTONE,
             List.of(new NodeType.Port("exec", PortKind.FLOW),
-                    new NodeType.Port("phase", PortKind.NUMBER),
-                    new NodeType.Port("gap", PortKind.NUMBER),
-                    new NodeType.Port("lit", PortKind.NUMBER),
                     new NodeType.Port("strength", PortKind.NUMBER)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
-            List.of("channel", "channel2", "mode", "phase", "gap", "lit", "strength"),
-            List.of("minecraft:redstone", "minecraft:redstone", "blink", "100", "3", "1", "15"));
+            List.of("channel", "channel2", "strength"),
+            List.of("minecraft:redstone", "minecraft:redstone", "15"));
+
+    /**
+     * 线缆发信：通过拓展器上的线缆向指定序列号（1~64）发信号。
+     * 同样执行到的这一 tick 亮起，下一 tick 没再执行就熄灭。
+     */
+    public static final NodeType CABLE_SEND = add("cable_send", NodeCategory.REDSTONE,
+            List.of(new NodeType.Port("exec", PortKind.FLOW),
+                    new NodeType.Port("serial", PortKind.NUMBER),
+                    new NodeType.Port("strength", PortKind.NUMBER)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("serial", "strength"),
+            List.of("1", "15"));
 
     // ---------------------------------------------------------------- 局域网模块
 

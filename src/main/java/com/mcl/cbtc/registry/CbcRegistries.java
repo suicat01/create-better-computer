@@ -39,9 +39,15 @@ public final class CbcRegistries {
                         output.accept(CbcBlocks.INFO_TRANSMITTER.get());
                         output.accept(CbcBlocks.SPEED_CONTROLLER.get());
                         output.accept(CbcBlocks.ADVANCED_DISPLAY_LINK.get());
+                        // CBC 联动方块：未安装加农炮时这两个方块不存在，直接跳过
+                        if (com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT != null) {
+                            output.accept(com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT.get());
+                            output.accept(com.mcl.cbtc.compat.cbc.CbcCannons.SMART_FIXED_CANNON_MOUNT.get());
+                        }
                         output.accept(CbcItems.STORAGE_LINK_MODULE.get());
                         output.accept(CbcItems.DISPLAY_LINK_MODULE.get());
                         output.accept(CbcItems.WIRELESS_REDSTONE_MODULE.get());
+                        output.accept(CbcItems.CABLE_MODULE.get());
                         output.accept(CbcItems.LAN_MODULE.get());
                         output.accept(CbcItems.DEVICE_MODULE.get());
                         output.accept(CbcItems.INTERNET_MODULE.get());
@@ -49,6 +55,8 @@ public final class CbcRegistries {
                         output.accept(CbcItems.HARD_DRIVE.get());
                         output.accept(CbcItems.TARGET_LOCATOR.get());
                         output.accept(CbcItems.LODESTONE_CHARM.get());
+                        output.accept(CbcItems.GUNNER_SIGHT.get());
+                        output.accept(CbcItems.GUN_REMOTE.get());
                         output.accept(CbcItems.BOUND_COMPASS.get());
                         output.accept(CbcItems.MUSIC_MODULE.get());
                         output.accept(CbcItems.GEARBOX_ANGLE_TOOL.get());
@@ -79,6 +87,8 @@ public final class CbcRegistries {
         CbcBlockEntities.register(modEventBus);
         CbcMenus.register(modEventBus);
         CbcRecipes.register(modEventBus);
+        // 智能炮座/智能固定炮座：属于加农炮联动，未安装 CBC 时整段跳过
+        com.mcl.cbtc.compat.cbc.CbcCannons.register(modEventBus);
         TABS.register(modEventBus);
         // 目标定位模块的导航目标注册到航空学的注册表里；没装航空学时跳过
         if (com.mcl.cbtc.device.DeviceAccessBridge.hasSimulated()) {

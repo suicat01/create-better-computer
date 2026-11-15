@@ -93,7 +93,6 @@ public class HardDriveItem extends UpgradeModuleItem {
                         .withStyle(ChatFormatting.GRAY));
             }
         }
-        tooltip.add(Component.translatable("item.cbtc.hard_drive.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 
     private static CompoundTag tag(ItemStack stack) {

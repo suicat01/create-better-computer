@@ -83,6 +83,11 @@ public final class CbcItems {
             ITEMS.register("wireless_redstone_module", () -> new com.mcl.cbtc.item.WirelessRedstoneModuleItem(
                     new Item.Properties().stacksTo(1)));
 
+    /** 线缆升级模块卡：插入拓展器后，拓展器可作为线缆信号源（序列号 1~64）。 */
+    public static final DeferredItem<com.mcl.cbtc.item.CableModuleItem> CABLE_MODULE =
+            ITEMS.register("cable_module", () -> new com.mcl.cbtc.item.CableModuleItem(
+                    new Item.Properties().stacksTo(1)));
+
     public static final DeferredItem<com.mcl.cbtc.item.LanModuleItem> LAN_MODULE =
             ITEMS.register("lan_module", () -> new com.mcl.cbtc.item.LanModuleItem(
                     new Item.Properties().stacksTo(1)));
@@ -109,6 +114,16 @@ public final class CbcItems {
 
     public static final DeferredItem<com.mcl.cbtc.item.LodestoneCharmItem> LODESTONE_CHARM =
             ITEMS.register("lodestone_charm", () -> new com.mcl.cbtc.item.LodestoneCharmItem(
+                    new Item.Properties().stacksTo(1)));
+
+    /** 枪炮手的瞄准组件：装了饰品栏时装在饰品槽，否则戴在头上。 */
+    public static final DeferredItem<com.mcl.cbtc.item.GunnerSightItem> GUNNER_SIGHT =
+            ITEMS.register("gunner_sight", () -> new com.mcl.cbtc.item.GunnerSightItem(
+                    new Item.Properties().stacksTo(1)));
+
+    /** 枪式遥控器：手持右键进入使用状态，鼠标左右键可供电脑读取。 */
+    public static final DeferredItem<com.mcl.cbtc.item.GunRemoteItem> GUN_REMOTE =
+            ITEMS.register("gun_remote", () -> new com.mcl.cbtc.item.GunRemoteItem(
                     new Item.Properties().stacksTo(1)));
 
     public static final DeferredItem<com.mcl.cbtc.item.BoundCompassItem> BOUND_COMPASS =

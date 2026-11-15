@@ -74,18 +74,19 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     private final java.util.Map<String, Integer> wirelessReceivedByChannel = new java.util.LinkedHashMap<>();
     private int lastWirelessReceived;
     private int wirelessSendStrength;
-    /** 整段信号阶段剩余刻数；大于 0 表示正在发信。 */
-    private int wirelessSendPhase;
-    /** 闪烁模式下每次熄灭的刻数；0 表示常亮。 */
-    private int wirelessSendGap;
-    /** 闪烁模式下每次亮起的持续刻数。 */
-    private int wirelessSendLit;
-    /** 当前亮灭状态剩余刻数。 */
-    private int wirelessSendRemaining;
-    /** 是否处于高频闪烁模式。 */
-    private boolean wirelessSendBlink;
-    /** 当前是否点亮。 */
-    private boolean wirelessSendLitState;
+    /** 发信积木执行后保持点亮的刻数：1 刻，松开/停止后下一刻立即熄灭。 */
+    private static final long SEND_PULSE_TICKS = 1;
+    /** 发信积木最近一次执行的游戏刻：超过脉冲保持时间就熄灭。 */
+    private long wirelessSendTick = -1;
+    /** 当前是否处于发信状态。 */
+    private boolean wirelessSending;
+
+    /** 线缆发信当前亮着的序列号。 */
+    private final java.util.Set<Integer> cableActiveSerials = new java.util.HashSet<>();
+    /** 序列号 → 最近一次执行发信积木的游戏刻。 */
+    private final java.util.Map<Integer, Long> cableSendTick = new java.util.HashMap<>();
+    /** 线缆发信写入的拓展器位置。 */
+    private net.minecraft.core.BlockPos cableSendPos;
 
     /** 当前已加入的局域网：键是规范化后的局域网 ID；换卡或拔卡时随 tick 同步增删。 */
     private final java.util.Map<String, com.mcl.cbtc.lan.LanBus.LanNetwork> lanNetworks =
@@ -165,9 +166,11 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                 lastWirelessReceived = wirelessReceived;
                 vm.receiveWirelessRedstone(wirelessReceived);
             }
-            tickWirelessTransmitter();
             vm.tick(serverLevel.getGameTime());
         }
+        // 发信积木"按住才亮"：本刻没再执行就熄灭，关机时也走这里清零
+        tickWirelessTransmitter();
+        tickCableTransmitter();
         tickSoundParticles();
         if (serverLevel.getGameTime() % 20 == 0) {
             for (var player : serverLevel.players()) {
@@ -180,7 +183,7 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                 // 局域网卡片可随时插拔，状态也随周期同步，积木里的"局域网"下拉才能及时刷新
                 net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
                         new com.mcl.cbtc.network.DeviceStatusPayload(worldPosition, deviceStatus(),
-                                hasStorageModule(), hasWirelessRedstoneModule(), installedLanIds(),
+                                hasStorageModule(), hasWirelessRedstoneModule(), hasCableModule(), installedLanIds(),
                                 hasInternetModule(), hasSpeakerModule(), hasHardDrive(),
                                 songNames(), playlistIds()));
                 }
@@ -1141,7 +1144,14 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     @Override
     public java.util.List<Integer> pressedKeys(String deviceId) {
         com.mcl.cbtc.item.DeviceModuleItem.Device device = boundDevices().get(deviceId);
-        if (device == null || device.kind() != com.mcl.cbtc.device.DeviceKind.TYPEWRITER) {
+        if (device == null) {
+            return java.util.List.of();
+        }
+        // 枪式遥控器是物品型外设，按键记录在服务端的遥控器输入状态里
+        if (device.kind() == com.mcl.cbtc.device.DeviceKind.GUN_REMOTE) {
+            return com.mcl.cbtc.device.GunRemoteState.pressed(device.id());
+        }
+        if (device.kind() != com.mcl.cbtc.device.DeviceKind.TYPEWRITER) {
             return java.util.List.of();
         }
         if (!(level instanceof ServerLevel serverLevel)) {
@@ -1170,6 +1180,214 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             return;
         }
         com.mcl.cbtc.device.Devices.controlGearbox(target, com.mcl.cbtc.device.Devices.currentPos(device.id(), device.pos()), speed, mode, value);
+    }
+
+    /**
+     * 雷达映射：把指定网络控制器提供的目标同步给戴着指定瞄准组件的玩家。
+     * <p>
+     * 目标来自网络控制器自己的过滤结果，客户端只保留 2 秒，所以这条积木需要放进「重复执行」里持续刷新。
+     */
+    @Override
+    public void mapRadarToSight(String radarDeviceId, String sightDeviceId) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
+        com.mcl.cbtc.item.DeviceModuleItem.Device radar = devices.get(radarDeviceId);
+        if (radar == null || radar.kind() != com.mcl.cbtc.device.DeviceKind.NETWORK_CONTROLLER
+                || radar.dimension() == null) {
+            return;
+        }
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        // 没装雷达模组时不去触碰它的类型
+        if (!com.mcl.cbtc.compat.Radar.loaded()) {
+            return;
+        }
+        ServerLevel radarLevel = serverLevel.getServer().getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION, radar.dimension()));
+        if (radarLevel == null) {
+            return;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity radarEntity = com.mcl.cbtc.device.Devices.blockEntityAt(
+                radarLevel, com.mcl.cbtc.device.Devices.currentPos(radar.id(), radar.pos()));
+        java.util.List<com.mcl.cbtc.compat.RadarCompat.TrackedEntity> tracked =
+                com.mcl.cbtc.compat.RadarCompat.tracked(radarEntity);
+        if (tracked.isEmpty()) {
+            return;
+        }
+        net.minecraft.server.level.ServerPlayer wearer = findSightWearer(radarLevel, sight.id());
+        if (wearer == null) {
+            return;
+        }
+        // 默认忽略装备者自己
+        int wearerId = wearer.getId();
+        java.util.List<com.mcl.cbtc.compat.RadarCompat.TrackedEntity> visible =
+                new java.util.ArrayList<>(tracked.size());
+        for (com.mcl.cbtc.compat.RadarCompat.TrackedEntity target : tracked) {
+            if (target.entityId() != wearerId) {
+                visible.add(target);
+            }
+        }
+        if (visible.isEmpty()) {
+            return;
+        }
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(wearer,
+                com.mcl.cbtc.network.SightTargetsPayload.of(radarLevel.dimension().location(), visible));
+    }
+
+    /**
+     * 哨戒动力臂瞄准：让指定动力臂瞄准指定瞄准组件佩戴者的准星。
+     * <p>
+     * 每次执行只刷新一次瞄准点，所以要放进「重复执行」里持续调用；
+     * 动力臂绑定后已进入接管状态，原版自动索敌不会抢回控制权。
+     */
+    @Override
+    public void sentryAim(String sentryDeviceId, String sightDeviceId) {
+        if (!(level instanceof ServerLevel serverLevel) || !com.mcl.cbtc.device.Devices.hasFireControl()) {
+            return;
+        }
+        java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
+        net.minecraft.world.level.block.entity.BlockEntity arm = sentryArm(devices.get(sentryDeviceId));
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
+        if (arm == null || sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        net.minecraft.server.level.ServerPlayer wearer = findSightWearer(serverLevel, sight.id());
+        if (wearer == null) {
+            return;
+        }
+        // 准星落在生物上时瞄准它的包围盒中心；否则退回方块准星落点/视线尽头。
+        // 直接打方块落点会因为动力臂与玩家视角存在视差而大多擦过生物。
+        net.minecraft.world.phys.Vec3 eye = wearer.getEyePosition(1.0F);
+        net.minecraft.world.phys.Vec3 look = wearer.getViewVector(1.0F);
+        double maxDistance = 256.0D;
+        net.minecraft.world.phys.Vec3 reach = look.scale(maxDistance);
+        net.minecraft.world.phys.Vec3 blockPoint = wearer.pick(maxDistance, 1.0F, false).getLocation();
+        double blockDistanceSqr = blockPoint.distanceToSqr(eye);
+        net.minecraft.world.phys.EntityHitResult entityHit =
+                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(wearer,
+                        eye, eye.add(reach),
+                        wearer.getBoundingBox().expandTowards(reach).inflate(1.0D),
+                        entity -> entity != wearer && !entity.isSpectator() && entity.isPickable(),
+                        maxDistance * maxDistance);
+        net.minecraft.world.phys.Vec3 point =
+                entityHit != null && entityHit.getLocation().distanceToSqr(eye) <= blockDistanceSqr
+                        ? entityHit.getEntity().getBoundingBox().getCenter()
+                        : blockPoint;
+        if (cbtc$isSmartMount(arm)) {
+            com.mcl.cbtc.compat.cbc.CannonMountCompat.aim(arm, point);
+        } else if (com.mcl.cbtc.device.Devices.hasSentry()) {
+            com.mcl.cbtc.compat.SentryArmCompat.aim(arm, point);
+        }
+    }
+
+    /** 哨戒动力臂射击：每执行一次模拟一次扳机，点射/连发节奏交给枪械自身。 */
+    @Override
+    public void sentryFire(String sentryDeviceId) {
+        if (!(level instanceof ServerLevel) || !com.mcl.cbtc.device.Devices.hasSentry()) {
+            return;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity arm =
+                sentryArm(boundDevices().get(sentryDeviceId));
+        if (arm != null) {
+            com.mcl.cbtc.compat.SentryArmCompat.fire(arm);
+        }
+    }
+
+    /** 动力臂换弹：智能炮座不参与换弹，保持原样。 */
+    @Override
+    public void sentryReload(String sentryDeviceId) {
+        if (!(level instanceof ServerLevel) || !com.mcl.cbtc.device.Devices.hasSentry()) {
+            return;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity arm =
+                sentryArm(boundDevices().get(sentryDeviceId));
+        if (arm != null) {
+            com.mcl.cbtc.compat.SentryArmCompat.reload(arm);
+        }
+    }
+
+    /** 火控单位可用弹药：动力臂读弹药箱，智能炮座读炮内炮弹。 */
+    @Override
+    public double sentryReserveAmmo(String sentryDeviceId) {
+        net.minecraft.world.level.block.entity.BlockEntity arm = sentryArmForRead(sentryDeviceId);
+        if (arm == null) {
+            return 0;
+        }
+        if (cbtc$isSmartMount(arm)) {
+            return com.mcl.cbtc.compat.cbc.CannonMountCompat.ammo(arm);
+        }
+        return com.mcl.cbtc.device.Devices.hasSentry()
+                ? com.mcl.cbtc.compat.SentryArmCompat.reserveAmmo(arm)
+                : 0;
+    }
+
+    /** 动力臂武器弹匣内弹量：智能炮座没有弹匣概念，返回 0。 */
+    @Override
+    public double sentryMagazineAmmo(String sentryDeviceId) {
+        net.minecraft.world.level.block.entity.BlockEntity arm = sentryArmForRead(sentryDeviceId);
+        if (arm == null || cbtc$isSmartMount(arm)) {
+            return 0;
+        }
+        return com.mcl.cbtc.device.Devices.hasSentry()
+                ? com.mcl.cbtc.compat.SentryArmCompat.magazineAmmo(arm)
+                : 0;
+    }
+
+    /** 该方块实体是不是本模组的智能炮座；CBC 未安装时不会触碰它的类型。 */
+    private static boolean cbtc$isSmartMount(net.minecraft.world.level.block.entity.BlockEntity be) {
+        return be != null && com.mcl.cbtc.compat.cbc.CbcCannons.loaded()
+                && com.mcl.cbtc.compat.cbc.CannonMountCompat.isSmartMount(be);
+    }
+
+    /** 读取火控单位数值时的公共查表；没有可用火控单位或设备不在线时返回 null。 */
+    @Nullable
+    private net.minecraft.world.level.block.entity.BlockEntity sentryArmForRead(String sentryDeviceId) {
+        if (!(level instanceof ServerLevel) || !com.mcl.cbtc.device.Devices.hasFireControl()) {
+            return null;
+        }
+        return sentryArm(boundDevices().get(sentryDeviceId));
+    }
+
+    /** 取的绑定记录对应的哨戒动力臂方块实体；不是动力臂或不在线时返回 null。 */
+    @Nullable
+    private net.minecraft.world.level.block.entity.BlockEntity sentryArm(
+            @Nullable com.mcl.cbtc.item.DeviceModuleItem.Device device) {
+        if (!(level instanceof ServerLevel serverLevel) || device == null
+                || device.kind() != com.mcl.cbtc.device.DeviceKind.SENTRY_ARM
+                || device.dimension() == null) {
+            return null;
+        }
+        ServerLevel armLevel = serverLevel.getServer().getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION, device.dimension()));
+        if (armLevel == null) {
+            return null;
+        }
+        return com.mcl.cbtc.device.Devices.blockEntityAt(armLevel,
+                com.mcl.cbtc.device.Devices.currentPos(device.id(), device.pos()));
+    }
+
+    /** 找到戴着指定 ID 瞄准组件的玩家；原版头部槽位与饰品栏都算。 */
+    private net.minecraft.server.level.ServerPlayer findSightWearer(ServerLevel anyLevel, String sightId) {
+        if (sightId == null || sightId.isBlank()) {
+            return null;
+        }
+        for (ServerLevel target : anyLevel.getServer().getAllLevels()) {
+            for (net.minecraft.server.level.ServerPlayer player : target.players()) {
+                if (sightId.equals(com.mcl.cbtc.item.GunnerSightItem.id(
+                        player.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD)))) {
+                    return player;
+                }
+                if (com.mcl.cbtc.compat.Curios.loaded()
+                        && com.mcl.cbtc.compat.CuriosCompat.isWearingSight(player, sightId)) {
+                    return player;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -1398,8 +1616,8 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             link.setFrequencies(ItemStack.EMPTY, ItemStack.EMPTY);
             return;
         }
-        // 发信正在运行时不覆盖频率，否则会把 sendWirelessRedstone 选定的频道冲掉
-        if (wirelessSendPhase > 0) {
+        // 发信积木每刻执行一次，正在发信时不覆盖频率，否则会把刚选定的频道冲掉
+        if (wirelessSending) {
             return;
         }
         // 把所有接收类积木的频道都订阅上，这样不同条件积木可以各用一组频道
@@ -1436,50 +1654,89 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     /**
      * 发送无线红石信号。
      * <p>
-     * phase 是整段信号的总时长；gap 是熄灭间隔；lit 是每次亮起的持续刻数。
-     * 每 (lit + gap) 刻为一个亮灭周期：先亮 lit 刻，再灭 gap 刻。
-     * gap 为 0 时整段常亮。总时长结束后信号归零，直到再次执行发信积木。
+     * 只负责"点亮"：信号在执行的这一 tick 有效，下一 tick 如果没有再执行同一条积木，
+     * 由 {@link #tickWirelessTransmitter()} 熄灭。也就是按下亮、松开灭。
      */
     @Override
-    public void sendWirelessRedstone(String first, String second, String mode, int phase, int gap, int lit,
-                                     int strength) {
+    public void sendWirelessRedstone(String first, String second, int strength) {
         if (!hasWirelessRedstoneModule()) {
             return;
         }
         setWirelessFrequencies(first, second);
         wirelessSendStrength = Math.max(0, Math.min(15, strength));
-        wirelessSendPhase = Math.max(1, phase);
-        wirelessSendBlink = !"steady".equals(mode);
-        wirelessSendGap = wirelessSendBlink ? Math.max(1, gap) : 0;
-        // 亮起时刻最多占满一个亮灭周期
-        wirelessSendLit = Math.min(Math.max(1, lit), wirelessSendGap > 0 ? wirelessSendGap + lit : lit);
-        wirelessSendRemaining = wirelessSendLit;
-        wirelessSendLitState = true;
+        wirelessSendTick = level == null ? 0 : level.getGameTime();
+        wirelessSending = true;
         link.setStrength(wirelessSendStrength);
     }
 
+    /** 每刻收尾：超过最短脉冲时长仍没有再执行发信积木就熄灭。 */
     private void tickWirelessTransmitter() {
-        if (wirelessSendPhase <= 0) {
+        if (!wirelessSending || level == null) {
             return;
         }
-        if (wirelessSendPhase-- <= 1) {
-            // 整段阶段结束，信号归零
-            wirelessSendPhase = 0;
+        if (level.getGameTime() - wirelessSendTick >= SEND_PULSE_TICKS) {
+            wirelessSending = false;
             link.setStrength(0);
+        }
+    }
+
+    // ---------------------------------------------------------------- 线缆发信
+
+    /** 拓展器里是否装了线缆升级模块卡。 */
+    public boolean hasCableModule() {
+        ExpanderBlockEntity expander = attachedExpander();
+        return expander != null && expander.hasCableModule();
+    }
+
+    /**
+     * 通过线缆向拓展器的某个序列号（1~64）发信。
+     * <p>
+     * 与无线红石一致：只在执行的这一 tick 亮起，下一 tick 没再执行同一序列号就熄灭。
+     */
+    @Override
+    public void sendCableSignal(int serial, int strength) {
+        ExpanderBlockEntity expander = attachedExpander();
+        if (level == null || level.isClientSide || expander == null || !expander.hasCableModule()) {
             return;
         }
-        if (wirelessSendGap <= 0) {
-            // 常亮：整段保持信号强度
-            link.setStrength(wirelessSendStrength);
+        int channel = Math.max(1, Math.min(com.mcl.cbtc.compat.cable.CableCompat.CHANNELS, serial));
+        int value = Math.max(0, Math.min(15, strength));
+        cableSendPos = expander.getBlockPos();
+        cableActiveSerials.add(channel);
+        cableSendTick.put(channel, level.getGameTime());
+        com.mcl.cbtc.compat.cable.CableCompat.setSignal(level, cableSendPos, channel, value);
+    }
+
+    /** 每刻收尾：超过最短脉冲时长仍没再执行的序列号全部熄灭。 */
+    private void tickCableTransmitter() {
+        if (level == null || level.isClientSide || cableSendTick.isEmpty()) {
             return;
         }
-        if (wirelessSendRemaining <= 0) {
-            // 切换亮灭状态：按设定的亮起时刻与熄灭间隔交替
-            wirelessSendLitState = !wirelessSendLitState;
-            wirelessSendRemaining = wirelessSendLitState ? wirelessSendLit : wirelessSendGap;
-            link.setStrength(wirelessSendLitState ? wirelessSendStrength : 0);
+        long now = level.getGameTime();
+        java.util.Iterator<java.util.Map.Entry<Integer, Long>> iterator = cableSendTick.entrySet().iterator();
+        while (iterator.hasNext()) {
+            java.util.Map.Entry<Integer, Long> entry = iterator.next();
+            if (now - entry.getValue() < SEND_PULSE_TICKS) {
+                continue;
+            }
+            int channel = entry.getKey();
+            if (cableSendPos != null) {
+                com.mcl.cbtc.compat.cable.CableCompat.setSignal(level, cableSendPos, channel, 0);
+            }
+            cableActiveSerials.remove(channel);
+            iterator.remove();
         }
-        wirelessSendRemaining--;
+    }
+
+    /** 停掉所有线缆发信并把信号清零。 */
+    private void stopCableSignal() {
+        if (level != null && cableSendPos != null) {
+            for (int channel : cableActiveSerials) {
+                com.mcl.cbtc.compat.cable.CableCompat.setSignal(level, cableSendPos, channel, 0);
+            }
+        }
+        cableActiveSerials.clear();
+        cableSendTick.clear();
     }
 
     // ---------------------------------------------------------------- 频率 / 组
@@ -1611,11 +1868,16 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             return;
         }
         if (!hasWirelessRedstoneModule()) {
-            wirelessSendPhase = 0;
+            wirelessSending = false;
+            wirelessSendTick = -1;
             wirelessReceived = 0;
             wirelessReceivedByChannel.clear();
             lastWirelessReceived = 0;
             link.setStrength(0);
+        }
+        // 拔掉线缆模块卡后，正在进行的线缆发信要立刻停下并清零
+        if (!hasCableModule() && !cableSendTick.isEmpty()) {
+            stopCableSignal();
         }
         updateWirelessChannels();
         link.refreshNetwork();
@@ -1625,7 +1887,7 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                     && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                 net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
                         new com.mcl.cbtc.network.DeviceStatusPayload(worldPosition, deviceStatus(),
-                                hasStorageModule(), hasWirelessRedstoneModule(), installedLanIds(),
+                                hasStorageModule(), hasWirelessRedstoneModule(), hasCableModule(), installedLanIds(),
                                 hasInternetModule(), hasSpeakerModule(), hasHardDrive(),
                                 songNames(), playlistIds()));
             }

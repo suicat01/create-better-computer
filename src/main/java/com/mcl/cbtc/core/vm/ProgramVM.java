@@ -81,12 +81,6 @@ public final class ProgramVM {
     private final Map<Integer, String> gearboxRuns = new HashMap<>();
     /** 点动积木最近一次真正被执行的刻，用来判断"还按着"还是"已经松开"。 */
     private final Map<Integer, Long> jogRunTicks = new HashMap<>();
-    /** 打字机按键已按住的刻数：达到长按阈值后转为每刻连发。 */
-    private final Map<Integer, Integer> keyHoldTicks = new HashMap<>();
-    /** 按键条件积木上一次判断时是否按着，用于条件积木独立累计按住刻数。 */
-    private final Map<Integer, Boolean> keyConditionArmed = new HashMap<>();
-    /** 长按判定阈值：按住 0.2 秒（4 刻）视为长按。 */
-    private static final int KEY_LONG_PRESS_TICKS = 4;
     private final List<Flow> flows = new ArrayList<>();
     private final List<Inbox> inbox = new ArrayList<>();
     private final List<WirelessSignal> wirelessInbox = new ArrayList<>();
@@ -165,8 +159,6 @@ public final class ProgramVM {
         conditionArmed.clear();
         gearboxRuns.clear();
         jogRunTicks.clear();
-        keyHoldTicks.clear();
-        keyConditionArmed.clear();
         wirelessStrength = 0;
         wirelessByChannel.clear();
         startFlowArmed = true;
@@ -222,20 +214,17 @@ public final class ProgramVM {
                 flows.add(flow);
             }
         }
-        // "当打字机按下某键时"：按下立刻触发一次，按住超过 0.2 秒后继续每刻连发，
-        // 即短按能响应、长按也能持续响应。
+        // "当打字机按下某键时"：只在按下的那一刻触发一次，按住多久都不会重复。
         for (Node node : program.nodesOfType("typewriter_key")) {
-            KeyState state = trackKey(node);
-            if (state.justPressed() || state.longPressing()) {
+            if (keyPressedThisTick(node)) {
                 Flow flow = new Flow();
                 flow.enter(program, node.id(), "exec");
                 flows.add(flow);
             }
         }
-        // "当打字机长按某键时"：按下后前 0.2 秒完全不响应，满阈值起每刻触发，松开即停。
-        for (Node node : program.nodesOfType("typewriter_long_press")) {
-            KeyState state = trackKey(node);
-            if (state.longPressing()) {
+        // "当打字机按住某键时"：按住期间每刻触发，松开即停，适合持续发信这类需求。
+        for (Node node : program.nodesOfType("typewriter_held")) {
+            if (keyHeld(node)) {
                 Flow flow = new Flow();
                 flow.enter(program, node.id(), "exec");
                 flows.add(flow);
@@ -953,6 +942,25 @@ public final class ProgramVM {
                 host.stopGearbox(node.param("device"));
                 return "exec";
             }
+            case "radar_map" -> {
+                // 把雷达扫描结果同步给戴着瞄准组件的玩家；框在客户端保留 2 秒，需要重复执行持续刷新
+                host.mapRadarToSight(node.param("radar"), node.param("sight"));
+                return "exec";
+            }
+            case "sentry_aim" -> {
+                // 每次都刷新瞄准点；动力臂在绑定后就已由电脑接管，不会再自动索敌
+                host.sentryAim(node.param("sentry"), node.param("sight"));
+                return "exec";
+            }
+            case "sentry_fire" -> {
+                // 每执行一次模拟一次扳机，点射/连发节奏由枪械自身决定；弹匣空时自动换弹
+                host.sentryFire(node.param("sentry"));
+                return "exec";
+            }
+            case "sentry_reload" -> {
+                host.sentryReload(node.param("sentry"));
+                return "exec";
+            }
             case "speed_controller_set" -> {
                 // 转速填绝对值，方向由顺逆时针选择器决定
                 double rpm = Math.abs(numberOrParam(node, "rpm"));
@@ -1026,10 +1034,11 @@ public final class ProgramVM {
             }
             case "redstone_send" -> {
                 host.sendWirelessRedstone(node.param("channel"), node.param("channel2"),
-                        node.param("mode"),
-                        (int) Math.max(1, Math.min(72000, tickOrParam(node, "phase"))),
-                        (int) Math.max(0, Math.min(72000, tickOrParam(node, "gap"))),
-                        (int) Math.max(1, Math.min(72000, tickOrParam(node, "lit"))),
+                        (int) Math.max(0, Math.min(15, numberOrParam(node, "strength"))));
+                return "exec";
+            }
+            case "cable_send" -> {
+                host.sendCableSignal((int) Math.max(1, Math.min(64, numberOrParam(node, "serial"))),
                         (int) Math.max(0, Math.min(15, numberOrParam(node, "strength"))));
                 return "exec";
             }
@@ -1246,11 +1255,12 @@ public final class ProgramVM {
             case "gearbox_angle" -> new Value.Num(host.gearboxAngle(source.param("device")), false, "°");
             case "speed_controller_get" -> Value.of(
                     Math.abs(host.speedControllerSpeed(source.param("device"))));
+            case "sentry_ammo" -> Value.of(host.sentryReserveAmmo(source.param("sentry")));
+            case "sentry_magazine" -> Value.of(host.sentryMagazineAmmo(source.param("sentry")));
             case "angle_math" -> angleMathChain(source, depth);
             case "angle_compare" -> Value.of(angleCompare(source.param("op"),
                     eval(source, "a", depth).asNumber(),
                     eval(source, "b", depth).asNumber()));
-            case "typewriter_key_down" -> Value.of(keyDownShort(source));
             case "typewriter_key_held" -> Value.of(keyHeld(source));
             case "time_write" -> Value.of(timeWrite(source));
             case "time_current" -> Value.of(currentTime(source.param("unit")));
@@ -1268,77 +1278,18 @@ public final class ProgramVM {
         };
     }
 
-    /**
-     * 打字机按键是否处于长按状态：仍被按住，且连续按住的刻数已达长按阈值。
-     */
+    /** 打字机按键当前是否被按住。 */
     private boolean keyHeld(Node node) {
-        return heldTicks(node) >= KEY_LONG_PRESS_TICKS;
-    }
-
-    /**
-     * 打字机按键是否处于"按下中但还没到长按"的状态。
-     * <p>
-     * 与 {@link #keyHeld} 严格互补：按住且未满阈值时为 true，满阈值后转为 false。
-     */
-    private boolean keyDownShort(Node node) {
-        int held = heldTicks(node);
-        return held >= 0 && held < KEY_LONG_PRESS_TICKS;
-    }
-
-    /**
-     * 条件积木自己维护按住刻数：返回 -1 表示当前没按住。
-     * <p>
-     * 事件积木每刻会先走 {@link #trackKey}，但条件积木可能单独使用，
-     * 所以这里也要能独立累计，不能只依赖事件积木写入的记录。
-     */
-    private int heldTicks(Node node) {
         int key = parseInt(node.param("key"));
-        boolean down = host.pressedKeys(node.param("device")).contains(key);
-        if (!down) {
-            keyHoldTicks.remove(node.id());
-            keyConditionArmed.put(node.id(), false);
-            return -1;
-        }
-        boolean wasDown = keyConditionArmed.getOrDefault(node.id(), false);
-        keyConditionArmed.put(node.id(), true);
-        if (!wasDown) {
-            // 刚按下的这一帧：从第 0 刻开始
-            keyHoldTicks.put(node.id(), 0);
-            return 0;
-        }
-        int held = keyHoldTicks.getOrDefault(node.id(), 0) + 1;
-        keyHoldTicks.put(node.id(), held);
-        return held;
+        return host.pressedKeys(node.param("device")).contains(key);
     }
 
-    /**
-     * 更新一条打字机按键积木的按住状态，并返回本刻的判定结果。
-     * <p>
-     * 同一条积木每刻只会调用一次，所以按住刻数在这里累加；
-     * 松开时清零，下次按下重新从 0 开始计数。
-     */
-    private KeyState trackKey(Node node) {
-        int key = parseInt(node.param("key"));
-        boolean down = host.pressedKeys(node.param("device")).contains(key);
-        if (!down) {
-            keyHoldTicks.remove(node.id());
-            conditionArmed.put(node.id(), false);
-            return new KeyState(false, false);
-        }
+    /** 本刻是否刚好按下（上一刻还松着）：只在上跳沿返回 true。 */
+    private boolean keyPressedThisTick(Node node) {
+        boolean down = keyHeld(node);
         boolean wasDown = conditionArmed.getOrDefault(node.id(), false);
-        conditionArmed.put(node.id(), true);
-        if (!wasDown) {
-            // 刚按下这一帧：记为第 0 刻
-            keyHoldTicks.put(node.id(), 0);
-            return new KeyState(true, false);
-        }
-        int held = keyHoldTicks.getOrDefault(node.id(), 0) + 1;
-        keyHoldTicks.put(node.id(), held);
-        return new KeyState(false, held >= KEY_LONG_PRESS_TICKS);
-    }
-
-    /** 单条按键积木本刻的状态：是否刚按下、是否已进入长接连发。 */
-    private record KeyState(boolean justPressed, boolean longPressing) {
+        conditionArmed.put(node.id(), down);
+        return down && !wasDown;
     }
 
 

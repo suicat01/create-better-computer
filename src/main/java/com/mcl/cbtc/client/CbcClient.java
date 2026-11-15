@@ -23,6 +23,15 @@ public class CbcClient {
         // 网络歌曲状态上报：歌曲只在客户端存在，需要定时推给服务端
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 com.mcl.cbtc.integration.netmusic.MusicReporter.class);
+        // 枪炮手的瞄准组件：戴上后绘制取景器式的屏幕效果
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(GunnerSightOverlay::onRenderGui);
+        // 枪炮手的瞄准组件：Ctrl + 滚轮调整画面缩放
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(GunnerSightZoom::onMouseScroll);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(GunnerSightZoom::onComputeFov);
+        // 智能炮座的局部模型必须在第一次资源重载前创建，否则 Flywheel 收集不到，渲染成紫黑格
+        if (com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
+            SmartCannonMountModels.init();
+        }
     }
 
     @SubscribeEvent
@@ -54,6 +63,27 @@ public class CbcClient {
         CBGearboxVisuals.register();
         // 智能转速控制器同样是双端传动轴方块，可视化注册方式一致
         SmartSpeedControllerVisuals.register();
+        // 装了饰品栏模组时，让枪炮手的瞄准组件在头部饰品槽里真的画出来
+        if (com.mcl.cbtc.compat.Curios.loaded()) {
+            com.mcl.cbtc.compat.GunnerSightCurioRenderer.register();
+        }
+    }
+
+    @SubscribeEvent
+    static void registerReloadListeners(net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent event) {
+        // 资源重载会重建着色器，滤镜的后处理链要跟着丢弃
+        event.registerReloadListener(GunnerSightFilter.RELOAD_LISTENER);
+    }
+
+    @SubscribeEvent
+    static void registerLayerDefinitions(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterLayerDefinitions event) {
+        if (!com.mcl.cbtc.compat.Curios.loaded()) {
+            return;
+        }
+        // 瞄准组件的饰品渲染只需一个空的头部部件，用来跟随头部转动
+        event.registerLayerDefinition(com.mcl.cbtc.compat.GunnerSightCurioRenderer.LAYER,
+                () -> net.minecraft.client.model.geom.builders.LayerDefinition.create(
+                        com.mcl.cbtc.compat.GunnerSightCurioRenderer.mesh(), 64, 64));
     }
 
     @SubscribeEvent
@@ -77,6 +107,12 @@ public class CbcClient {
         // 超级烈焰人：复用原版烈焰人模型与动画，只换贴图
         event.registerEntityRenderer(com.mcl.cbtc.registry.CbcEntities.SUPER_BLAZE.get(),
                 SuperBlazeRenderer::new);
+        // 智能炮座：旋转炮架由自定义渲染器绘制（去掉了 CBC 原版的传动轴）
+        if (com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT_BE != null) {
+            event.registerBlockEntityRenderer(
+                    com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT_BE.get(),
+                    SmartCannonMountRenderer::new);
+        }
     }
 
     @SubscribeEvent

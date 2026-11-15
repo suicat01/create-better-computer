@@ -56,8 +56,6 @@ public class LodestoneCharmItem extends Item implements Equipable {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.cbtc.lodestone_charm.tooltip.equip")
-                .withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("item.cbtc.lodestone_charm.tooltip.bind")
                 .withStyle(ChatFormatting.DARK_GRAY));
         if (flag.isAdvanced()) {

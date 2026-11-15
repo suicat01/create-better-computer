@@ -29,7 +29,7 @@ public final class ClientHandlers {
     public static void onDeviceStatus(DeviceStatusPayload payload) {
         if (Minecraft.getInstance().screen instanceof com.mcl.cbtc.client.ComputerScreen screen) {
             screen.acceptDeviceStatus(payload.lines(), payload.storageModule(), payload.wirelessRedstoneModule(),
-                    payload.lanNetworks(), payload.internetModule(), payload.speakerModule(),
+                    payload.cableModule(), payload.lanNetworks(), payload.internetModule(), payload.speakerModule(),
                     payload.hardDrive(), payload.songs(), payload.playlists());
         }
     }
@@ -70,6 +70,11 @@ public final class ClientHandlers {
             }
             default -> com.mcl.cbtc.client.DeviceSelection.clear();
         }
+    }
+
+    /** 雷达映射：更新戴着瞄准组件的玩家屏幕上要圈住的实体。 */
+    public static void onSightTargets(SightTargetsPayload payload) {
+        com.mcl.cbtc.client.GunnerSightTargets.accept(payload.dimension(), payload.targets());
     }
 
     /** 局域网加入结果：在聊天栏下方提示成功或失败原因。 */

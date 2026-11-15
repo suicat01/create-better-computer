@@ -1,5 +1,6 @@
 package com.mcl.cbtc.compat;
 
+import com.mcl.cbtc.item.GunnerSightItem;
 import com.mcl.cbtc.item.LodestoneCharmItem;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -32,6 +33,29 @@ public final class CuriosCompat {
     public static boolean isWearing(Player player, String charmId) {
         return CuriosApi.getCuriosInventory(player)
                 .map(handler -> handler.findFirstCurio(stack -> isCharm(stack, charmId)).isPresent())
+                .orElse(false);
+    }
+
+    /** 玩家身上（任意饰品槽位）是否戴着指定物品。 */
+    public static boolean isWearing(Player player, Item item) {
+        return CuriosApi.getCuriosInventory(player)
+                .map(handler -> handler.findFirstCurio(stack -> stack.is(item)).isPresent())
+                .orElse(false);
+    }
+
+    /** 玩家身上（任意饰品槽位）戴着的指定物品；没戴时返回空栈。 */
+    public static ItemStack findWearing(Player player, Item item) {
+        return CuriosApi.getCuriosInventory(player)
+                .map(handler -> handler.findFirstCurio(stack -> stack.is(item))
+                        .map(result -> result.stack()).orElse(ItemStack.EMPTY))
+                .orElse(ItemStack.EMPTY);
+    }
+
+    /** 玩家身上（任意饰品槽位）是否戴着指定 ID 的枪炮手瞄准组件。 */
+    public static boolean isWearingSight(Player player, String sightId) {
+        return CuriosApi.getCuriosInventory(player)
+                .map(handler -> handler.findFirstCurio(stack -> stack.getItem() instanceof GunnerSightItem
+                        && sightId.equals(GunnerSightItem.id(stack))).isPresent())
                 .orElse(false);
     }
 

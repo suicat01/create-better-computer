@@ -83,7 +83,6 @@ public class StorageLinkModuleItem extends UpgradeModuleItem {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.cbtc.storage_link_module.tooltip").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable(network(stack) == null
                 ? "item.cbtc.storage_link_module.unbound" : "item.cbtc.storage_link_module.bound")
                 .withStyle(network(stack) == null ? ChatFormatting.RED : ChatFormatting.AQUA));

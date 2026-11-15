@@ -13,7 +13,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
  * songs / playlists 是拓展器里音乐模块卡提供的内容，供音乐积木的下拉使用。
  */
 public record DeviceStatusPayload(BlockPos pos, List<String> lines, boolean storageModule,
-        boolean wirelessRedstoneModule, List<String> lanNetworks, boolean internetModule,
+        boolean wirelessRedstoneModule, boolean cableModule, List<String> lanNetworks, boolean internetModule,
         boolean speakerModule, boolean hardDrive, List<String> songs, List<String> playlists)
         implements CustomPacketPayload {
     public static final Type<DeviceStatusPayload> TYPE =
@@ -24,6 +24,7 @@ public record DeviceStatusPayload(BlockPos pos, List<String> lines, boolean stor
                 BlockPos.STREAM_CODEC.encode(buf, payload.pos());
                 buf.writeBoolean(payload.storageModule());
                 buf.writeBoolean(payload.wirelessRedstoneModule());
+                buf.writeBoolean(payload.cableModule());
                 buf.writeBoolean(payload.internetModule());
                 buf.writeBoolean(payload.speakerModule());
                 buf.writeBoolean(payload.hardDrive());
@@ -48,6 +49,7 @@ public record DeviceStatusPayload(BlockPos pos, List<String> lines, boolean stor
                 BlockPos pos = BlockPos.STREAM_CODEC.decode(buf);
                 boolean storageModule = buf.readBoolean();
                 boolean wirelessRedstoneModule = buf.readBoolean();
+                boolean cableModule = buf.readBoolean();
                 boolean internetModule = buf.readBoolean();
                 boolean speakerModule = buf.readBoolean();
                 boolean hardDrive = buf.readBoolean();
@@ -71,8 +73,8 @@ public record DeviceStatusPayload(BlockPos pos, List<String> lines, boolean stor
                 for (int i = 0; i < playlistCount; i++) {
                     playlists.add(buf.readUtf(64));
                 }
-                return new DeviceStatusPayload(pos, lines, storageModule, wirelessRedstoneModule, lanNetworks,
-                        internetModule, speakerModule, hardDrive, songs, playlists);
+                return new DeviceStatusPayload(pos, lines, storageModule, wirelessRedstoneModule, cableModule,
+                        lanNetworks, internetModule, speakerModule, hardDrive, songs, playlists);
             });
 
     @Override

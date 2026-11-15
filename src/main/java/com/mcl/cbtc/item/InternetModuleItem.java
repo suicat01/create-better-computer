@@ -18,6 +18,5 @@ public class InternetModuleItem extends UpgradeModuleItem {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.cbtc.internet_module.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

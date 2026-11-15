@@ -1,0 +1,88 @@
+{
+  "type": "create:sequenced_assembly",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "drivebywire"
+    }
+  ],
+  "ingredient": {
+    "item": "cbtc:prototype_module_card"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:prototype_module_card"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "drivebywire:wire"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "drivebywire:wire"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:prototype_module_card"
+        },
+        {
+          "item": "drivebywire:controller_hub"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:prototype_module_card"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:cable_module",
+      "count": 1
+    }
+  ]
+}

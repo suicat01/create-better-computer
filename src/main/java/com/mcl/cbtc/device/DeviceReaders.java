@@ -41,6 +41,10 @@ final class DeviceReaders {
             case LECTURE_STONE -> 0;
             case NAV_TABLE -> 0;
             case TARGET_LOCATOR -> 0;
+            case NETWORK_CONTROLLER -> 0;
+            case GUNNER_SIGHT -> 0;
+            case GUN_REMOTE -> 0;
+            case SENTRY_ARM -> 0;
             case INFO_TRANSMITTER -> 0;
             case DIAGRAM_SENSOR -> DeviceAccess.diagram(level, pos, data);
         };

@@ -142,6 +142,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
     private java.util.List<String> deviceStatus = java.util.List.of();
     private boolean storageModuleInstalled;
     private boolean wirelessRedstoneModuleInstalled;
+    /** 拓展器里是否装了线缆升级模块卡：决定"发送线缆信号"积木是否出现。 */
+    private boolean cableModuleInstalled;
     /** 拓展器里是否装了已配置的局域网模块卡。 */
     private boolean lanInstalled;
     /** 拓展器里是否装了互联网模块卡。 */
@@ -369,12 +371,13 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     /** 服务端下发的外设连接情况，直接显示在底部状态栏。 */
     public void acceptDeviceStatus(java.util.List<String> lines, boolean storageModule,
-            boolean wirelessRedstoneModule, java.util.List<String> lanNetworks, boolean internetModule,
-            boolean speakerModule, boolean hardDrive, java.util.List<String> songs,
+            boolean wirelessRedstoneModule, boolean cableModule, java.util.List<String> lanNetworks,
+            boolean internetModule, boolean speakerModule, boolean hardDrive, java.util.List<String> songs,
             java.util.List<String> playlists) {
         this.deviceStatus = lines == null ? java.util.List.of() : java.util.List.copyOf(lines);
         this.storageModuleInstalled = storageModule;
         this.wirelessRedstoneModuleInstalled = wirelessRedstoneModule;
+        this.cableModuleInstalled = cableModule;
         this.lanNetworks = lanNetworks == null ? java.util.List.of() : java.util.List.copyOf(lanNetworks);
         this.lanInstalled = !this.lanNetworks.isEmpty();
         this.internetInstalled = internetModule;
@@ -722,6 +725,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
+        if (isCableType(type)) {
+            // 发送线缆信号 序列号 [serial] 强度 [strength]
+            cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.serial").getString());
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("serial"));
+            cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.strength").getString());
+            addSlot(n, layout.headerItems, cursor, "strength", depth + 1);
+            finishHeader(n, layout, depth);
+            return;
+        }
         if (isWirelessRedstoneType(type)) {
             cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.redstone.frequency1").getString());
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("channel"));
@@ -732,12 +744,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("op"));
                 addSlot(n, layout.headerItems, cursor, "strength", depth + 1);
             } else if ("redstone_send".equals(type.id())) {
-                cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.phase").getString());
-                cursor = addSlot(n, layout.headerItems, cursor, "phase", depth + 1);
-                cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.gap").getString());
-                cursor = addSlot(n, layout.headerItems, cursor, "gap", depth + 1);
-                cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.lit").getString());
-                cursor = addSlot(n, layout.headerItems, cursor, "lit", depth + 1);
+                // 执行时亮起、松开即熄灭，只留强度
                 cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.strength").getString());
                 addSlot(n, layout.headerItems, cursor, "strength", depth + 1);
             }
@@ -782,29 +789,24 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
-        if ("typewriter_long_press".equals(type.id())) {
-            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_long_press_head"));
+        if ("typewriter_held".equals(type.id())) {
+            // "当打字机 [设备] 的 [按键] 按住时"
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.node.parts.typewriter_key.head"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_typewriter"));
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device"));
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_of"));
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("key"));
-            addText(layout.headerItems, cursor, tr("cbtc.gui.blk_when_suffix"));
-            finishHeader(n, layout, depth);
-            return;
-        }
-        if ("typewriter_key_down".equals(type.id())) {
-            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_typewriter"));
-            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device"));
-            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_key"));
-            addParam(n, layout.headerItems, cursor, type.paramIndex("key"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.blk_holding_when"));
             finishHeader(n, layout, depth);
             return;
         }
         if ("typewriter_key_held".equals(type.id())) {
-            // "当打字机长按 [设备] 的 [按键] 中"
+            // "打字机 [设备] 的 [按键] 按住中"
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_typewriter"));
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device"));
-            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_pressed"));
-            addParam(n, layout.headerItems, cursor, type.paramIndex("key"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_of"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("key"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.blk_holding"));
             finishHeader(n, layout, depth);
             return;
         }
@@ -1025,6 +1027,51 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
+        if ("radar_map".equals(type.id())) {
+            buildRadarMapHeader(n, layout, cursor, depth);
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sentry_aim".equals(type.id())) {
+            // 让 [哨戒动力臂] 瞄准 [瞄准组件] 佩戴者的准星
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_mid"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sentry_fire".equals(type.id())) {
+            // 让 [哨戒动力臂] 扣动一次扳机
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_fire_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sentry_reload".equals(type.id())) {
+            // 让 [哨戒动力臂] 换弹
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_reload_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sentry_ammo".equals(type.id())) {
+            // [哨戒动力臂] 的可用弹药
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_ammo_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sentry_magazine".equals(type.id())) {
+            // [哨戒动力臂] 的弹匣内弹量
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_magazine_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
         int operator = operatorIndex(n);
         int keyIndex = 0;
         for (NodeType.Port port : type.inputs()) {
@@ -1182,6 +1229,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             }
             addSlot(n, layout.headerItems, cursor, "value", depth + 1);
         }
+    }
+
+    /** 雷达映射积木：将 &lt;雷达&gt; 映射到 &lt;瞄准组件&gt;。 */
+    private void buildRadarMapHeader(Node n, NodeLayout layout, int cursor, int depth) {
+        NodeType type = n.type();
+        cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.radar_map_head"));
+        cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("radar"));
+        cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.radar_map_middle"));
+        cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
     }
 
     /** 仓储积木：明确标出物品、数量和地址，端口仍可接表达式。 */
@@ -1675,6 +1731,14 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 return deviceNameOf(stored);
             }
         }
+        // 雷达映射积木的两个设备参数，同样显示成用户起的名字
+        if ("radar".equals(t.params().get(index)) || "sight".equals(t.params().get(index))) {
+            return deviceNameOf(stored);
+        }
+        // 哨戒动力臂积木的设备参数，同样显示成用户起的名字
+        if ("sentry".equals(t.params().get(index))) {
+            return deviceNameOf(stored);
+        }
         // 连线积木的齿轮箱是可选换算，没选时明确显示成偏差角
         if ("device_gearbox".equals(t.params().get(index)) && stored.isBlank()) {
             return tr("cbtc.gui.blk_no_gearbox");
@@ -1719,7 +1783,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
     private int paramWidth(Node n, int index) {
         NodeType t = n.type();
         int pad = t != null && (index == operatorIndex(n) || isItemParam(n, index)
-                || isWirelessRedstoneType(t) && ("color".equals(t.params().get(index))
+                || (isWirelessRedstoneType(t) || isCableType(t)) && ("color".equals(t.params().get(index))
                 || "mode".equals(t.params().get(index)))) ? 18 : 10;
         return Math.max(26, font.width(displayParam(n, index)) + pad);
     }
@@ -1762,9 +1826,6 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if ("chat_listen".equals(typeId)) {
             return "duration".equals(portKey);
-        }
-        if ("redstone_send".equals(typeId)) {
-            return "phase".equals(portKey) || "gap".equals(portKey) || "lit".equals(portKey);
         }
         return false;
     }
@@ -2034,12 +2095,22 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "redstone_received".equals(type.id()) || "redstone_received_compare".equals(type.id());
     }
 
+    /** 需要线缆升级模块卡才出现的积木。 */
+    private static boolean isCableType(NodeType type) {
+        return "cable_send".equals(type.id());
+    }
+
     /** 需要外设绑定模块卡才出现的积木。 */
     private static boolean isPeripheralType(NodeType type) {
         return isTypewriterNode(type.id())
                 || "gearbox_control".equals(type.id()) || "gearbox_stop".equals(type.id())
                 || "gearbox_angle".equals(type.id()) || isNavTableNode(type.id())
-                || isTargetLocatorNode(type.id());
+                || isTargetLocatorNode(type.id())
+                || "radar_map".equals(type.id())
+                || "speed_controller_set".equals(type.id())
+                || "sentry_aim".equals(type.id()) || "sentry_fire".equals(type.id())
+                || "sentry_reload".equals(type.id())
+                || "sentry_ammo".equals(type.id()) || "sentry_magazine".equals(type.id());
     }
 
     /** 目标定位模块相关积木：只能选已绑定的定位模块。 */
@@ -2063,10 +2134,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || type.id().startsWith("seq_drive_");
     }
 
-    /** 与打字机按键相关的积木：两个事件积木与两个条件积木都只能绑打字机。 */
+    /** 与打字机按键相关的积木：按下、按住两个事件与"按住中"状态位都只能绑打字机。 */
     private static boolean isTypewriterNode(String typeId) {
-        return "typewriter_key".equals(typeId) || "typewriter_long_press".equals(typeId)
-                || "typewriter_key_down".equals(typeId) || "typewriter_key_held".equals(typeId);
+        return "typewriter_key".equals(typeId) || "typewriter_held".equals(typeId)
+                || "typewriter_key_held".equals(typeId);
     }
 
     /** 需要局域网模块卡才出现的积木。 */
@@ -2103,6 +2174,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             for (NodeType t : NodeTypes.all()) {
                 if (t.category() == cat && (!isLogisticsType(t) || storageModuleInstalled)
                         && (!isWirelessRedstoneType(t) || wirelessRedstoneModuleInstalled)
+                        && (!isCableType(t) || cableModuleInstalled
+                        && com.mcl.cbtc.compat.cable.CableCompat.loaded())
                         && (!isPeripheralType(t) || !peripheralDevices.isEmpty())
                         && (!isLanType(t) || lanInstalled)
                         && (!needsInternet(t) || internetInstalled)
@@ -2817,6 +2890,13 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // 按键拾取：这次按下的鼠标左右键直接绑定为对应按键（0=左键，1=右键）
+        if (keyCaptureNode != null && (button == 0 || button == 1)) {
+            Node target = keyCaptureNode;
+            keyCaptureNode = null;
+            target.setParam("key", Integer.toString(button));
+            return true;
+        }
         // 运算符下拉菜单打开时，先吃掉这次点击
         if (deviceMenuNode != null) {
             return clickDeviceMenu(mx, my, button);
@@ -2956,14 +3036,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             commitParamEdit();
             return true;
         }
-        if (button == 1) {
-            Node hit = nodeAt(mx, my);
-            if (hit != null) {
-                commitParamEdit();
-                deleteSingle(hit);
-                return true;
-            }
-        }
+        // 右键不再删除积木：改为拖动积木时按退格删除
         return super.mouseClicked(mx, my, button);
     }
 
@@ -2991,12 +3064,27 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             return true;
         }
         if (dragging != null) {
+            // 按住退格拖动：直接删除正在拖的积木
+            if (backspaceDown()) {
+                Node n = dragging;
+                dragging = null;
+                draggedSubtree.clear();
+                deleteChain(n);
+                return true;
+            }
             dragX = mx;
             dragY = my;
             dragging.moveTo((float) (toWorldX(mx) - grabDX), (float) (toWorldY(my) - grabDY));
             return true;
         }
         return super.mouseDragged(mx, my, button, dx, dy);
+    }
+
+    /** 退格键当前是否按住（拖动删除用）。 */
+    private static boolean backspaceDown() {
+        return com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+                net.minecraft.client.Minecraft.getInstance().getWindow().getWindow(),
+                org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE);
     }
 
     @Override
@@ -3135,6 +3223,20 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 return true;
             }
             return true;
+        }
+        // 拖动积木时按退格：删除正在拖动的那块积木（连同挂在上面的子积木）
+        if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_BACKSPACE) {
+            if (draggingNew != null) {
+                draggingNew = null;
+                return true;
+            }
+            if (dragging != null) {
+                Node n = dragging;
+                dragging = null;
+                draggedSubtree.clear();
+                deleteChain(n);
+                return true;
+            }
         }
         // 复制/粘贴：在有输入框时已提前返回，所以这里不会抢输入框的 Ctrl+V
         boolean ctrl = (modifiers & org.lwjgl.glfw.GLFW.GLFW_MOD_CONTROL) != 0;
@@ -4032,6 +4134,28 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             // 只能选单个局域网：电脑有几个已加入的网就列几个，不提供"全部"
             return lanNetworks.toArray(String[]::new);
         }
+        if ("radar_device".equals(menuKind(node, index))
+                || "sight_device".equals(menuKind(node, index))) {
+            // 雷达映射积木：第一个参数只列网络控制器，第二个只列瞄准组件
+            String kind = "radar_device".equals(menuKind(node, index)) ? "network_controller" : "gunner_sight";
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (var device : peripheralDevices) {
+                if (kind.equals(device.kind())) {
+                    names.add(device.name());
+                }
+            }
+            return names.toArray(String[]::new);
+        }
+        if ("sentry_device".equals(menuKind(node, index))) {
+            // 哨戒动力臂积木只列已绑定的动力臂
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (var device : peripheralDevices) {
+                if ("sentry_arm".equals(device.kind())) {
+                    names.add(device.name() + "(" + kindDisplay(device.kind()) + ")");
+                }
+            }
+            return names.toArray(String[]::new);
+        }
         if ("info_device".equals(menuKind(node, index))) {
             java.util.List<String> names = new java.util.ArrayList<>();
             for (var device : infoTransmitterCandidates()) {
@@ -4044,7 +4168,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             boolean gearbox = "gearbox_device".equals(menuKind(node, index));
             // 连线积木的齿轮箱是可选换算：不选就输出偏差角（给推力/舵这类执行器用）
             boolean optionalGearbox = gearbox && "device_gearbox".equals(key);
-            // "当CB打字机按下"只能选打字机；"读取外设"只能选非打字机；齿轮箱积木只列齿轮箱
+            // "当键盘/遥控器按下"只列键盘类外设；"读取外设"列其它可读外设；齿轮箱积木只列齿轮箱
             boolean keyNode = isTypewriterNode(node.typeId());
             java.util.List<String> names = new java.util.ArrayList<>();
             if (optionalGearbox) {
@@ -4054,7 +4178,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 if (gearbox != "gearbox".equals(device.kind())) {
                     continue;
                 }
-                if (keyNode != "typewriter".equals(device.kind())) {
+                // 打字机与枪式遥控器共用"按键"积木，两种都列出来
+                boolean keyDevice = "typewriter".equals(device.kind()) || "gun_remote".equals(device.kind());
+                if (keyNode != keyDevice) {
                     continue;
                 }
                 // 音响之类的发声外设没有可读数据，不该出现在"读取外设"里
@@ -4071,6 +4197,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 }
                 // 转速控制器走专用积木
                 if (!gearbox && "speed_controller".equals(device.kind())) {
+                    continue;
+                }
+                // 哨戒动力臂走专用积木
+                if (!gearbox && "sentry_arm".equals(device.kind())) {
                     continue;
                 }
                 names.add(device.name() + "(" + kindDisplay(device.kind()) + ")");
@@ -4199,6 +4329,22 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("music_lang".equals(menuKind(node, index))) {
             return MUSIC_LANGUAGES[optionIndex];
         }
+        if ("radar_device".equals(menuKind(node, index))
+                || "sight_device".equals(menuKind(node, index))) {
+            // 与 deviceMenuOptions 的过滤保持一致
+            String wantedKind = "radar_device".equals(menuKind(node, index)) ? "network_controller" : "gunner_sight";
+            int seen = 0;
+            for (var device : peripheralDevices) {
+                if (!wantedKind.equals(device.kind())) {
+                    continue;
+                }
+                if (seen == optionIndex) {
+                    return device.id();
+                }
+                seen++;
+            }
+            return "";
+        }
         if ("peripheral_device".equals(menuKind(node, index))
                 || "gearbox_device".equals(menuKind(node, index))) {
             boolean gearbox = "gearbox_device".equals(menuKind(node, index));
@@ -4208,7 +4354,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 if (gearbox != "gearbox".equals(device.kind())) {
                     continue;
                 }
-                if (keyNode != "typewriter".equals(device.kind())) {
+                // 与 deviceMenuOptions 一致：打字机与枪式遥控器共用按键积木
+                boolean keyDevice = "typewriter".equals(device.kind()) || "gun_remote".equals(device.kind());
+                if (keyNode != keyDevice) {
                     continue;
                 }
                 // 与 deviceMenuOptions 的过滤保持一致，避免选项与取值错位
@@ -4225,6 +4373,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 if (!gearbox && "speed_controller".equals(device.kind())) {
                     continue;
                 }
+                // 与 deviceMenuOptions 一致：哨戒动力臂只在专用积木里出现
+                if (!gearbox && "sentry_arm".equals(device.kind())) {
+                    continue;
+                }
                 candidates.add(device);
             }
             if (gearbox && "device_gearbox".equals(key)) {
@@ -4232,6 +4384,20 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 return optionIndex == 0 ? "" : candidates.get(optionIndex - 1).id();
             }
             return candidates.get(optionIndex).id();
+        }
+        if ("sentry_device".equals(menuKind(node, index))) {
+            // 与 deviceMenuOptions 的过滤保持一致
+            int seen = 0;
+            for (var device : peripheralDevices) {
+                if (!"sentry_arm".equals(device.kind())) {
+                    continue;
+                }
+                if (seen == optionIndex) {
+                    return device.id();
+                }
+                seen++;
+            }
+            return "";
         }
         if ("locator_device".equals(menuKind(node, index))) {
             java.util.List<com.mcl.cbtc.network.DeviceListPayload.Entry> candidates = new java.util.ArrayList<>();
@@ -4297,6 +4463,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if ("lang".equals(key) && "music_song_lyric".equals(node.typeId())) {
             return "music_lang";
+        }
+        if ("radar".equals(key)) {
+            return "radar_device";
+        }
+        if ("sight".equals(key)) {
+            return "sight_device";
+        }
+        if ("sentry".equals(key)) {
+            return "sentry_device";
         }
         if (!"device".equals(key)) {
             return "";
@@ -4477,6 +4652,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         // 信息获取：转发器用下拉，行号直接打字输入
         if ("info_device".equals(menuKind(n, index))) {
+            commitParamEdit();
+            deviceMenuNode = n;
+            deviceMenuIndex = index;
+            deviceMenuScroll = 0;
+            return;
+        }
+        // 雷达映射：雷达与瞄准组件都从已绑定外设里选
+        if ("radar_device".equals(menuKind(n, index)) || "sight_device".equals(menuKind(n, index))
+                || "sentry_device".equals(menuKind(n, index))) {
             commitParamEdit();
             deviceMenuNode = n;
             deviceMenuIndex = index;

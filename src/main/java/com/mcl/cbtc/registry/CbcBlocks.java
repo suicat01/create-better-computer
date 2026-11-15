@@ -23,7 +23,7 @@ public final class CbcBlocks {
                     .noOcclusion()));
 
     public static final DeferredBlock<CBExpanderBlock> EXPANDER = BLOCKS.register("expander",
-            () -> new CBExpanderBlock(BlockBehaviour.Properties.of()
+            () -> com.mcl.cbtc.compat.cable.CableCompat.createExpanderBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0F, 6.0F)
                     .sound(SoundType.METAL)

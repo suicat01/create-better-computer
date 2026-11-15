@@ -77,6 +77,5 @@ public class LanModuleItem extends UpgradeModuleItem {
         } else {
             tooltip.add(Component.translatable("item.cbtc.lan_module.bound", id).withStyle(ChatFormatting.AQUA));
         }
-        tooltip.add(Component.translatable("item.cbtc.lan_module.tooltip").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

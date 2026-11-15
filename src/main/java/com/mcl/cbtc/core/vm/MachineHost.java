@@ -65,8 +65,14 @@ public interface MachineHost {
 
     boolean writeWirelessDisplay(String id, int line, String text);
 
-    /** 切换到指定双物品频率并发送信号。mode 为 steady（常亮）/ blink（高频闪烁）。 */
-    void sendWirelessRedstone(String first, String second, String mode, int phase, int gap, int lit, int strength);
+    /** 切换到指定双物品频率并发信。信号只在积木被执行的那一 tick 有效，之后不再执行即熄灭。 */
+    void sendWirelessRedstone(String first, String second, int strength);
+
+    /**
+     * 通过线缆向拓展器的指定序列号（1~64）发信。
+     * 同样只在积木被执行的那一 tick 有效，不再执行就熄灭。
+     */
+    void sendCableSignal(int serial, int strength);
 
     /**
      * 读取导航台的坐标或距离。key 取 x / z / target_x / target_z / distance。
@@ -116,6 +122,41 @@ public interface MachineHost {
 
     /** 立即停掉指定齿轮箱正在进行的旋转（任何模式都能被打断）；设备不存在时什么也不做。 */
     void stopGearbox(String deviceId);
+
+    /**
+     * 把雷达扫描到的实体映射到戴着指定瞄准组件的玩家屏幕上。
+     * <p>
+     * 每次执行只刷新一次目标列表，框在客户端保留 2 秒，所以要放进「重复执行」里持续调用。
+     */
+    default void mapRadarToSight(String radarDeviceId, String sightDeviceId) {
+    }
+
+    /**
+     * 让哨戒动力臂瞄准指定瞄准组件佩戴者的准星。
+     * <p>
+     * 每次执行只刷新一次瞄准点，所以要放进「重复执行」里持续调用；
+     * 绑定动力臂后它已进入接管状态，不会再自动索敌。
+     */
+    default void sentryAim(String sentryDeviceId, String sightDeviceId) {
+    }
+
+    /** 让哨戒动力臂扣动一次扳机：每执行一次模拟一次扳机，连发节奏交给枪械自身。 */
+    default void sentryFire(String sentryDeviceId) {
+    }
+
+    /** 让哨戒动力臂立即换弹；弹匣已满或没有匹配弹药时什么也不做。 */
+    default void sentryReload(String sentryDeviceId) {
+    }
+
+    /** 动力臂内可用弹药：弹药箱里与当前武器匹配的备用弹药总数（不含弹匣内已有的）。 */
+    default double sentryReserveAmmo(String sentryDeviceId) {
+        return 0;
+    }
+
+    /** 动力臂武器弹匣内弹量：当前武器弹匣里剩余的子弹数。 */
+    default double sentryMagazineAmmo(String sentryDeviceId) {
+        return 0;
+    }
 
     /** 指定齿轮箱相对零点的当前角度（-180~180）；设备不存在时返回 0。 */
     double gearboxAngle(String deviceId);

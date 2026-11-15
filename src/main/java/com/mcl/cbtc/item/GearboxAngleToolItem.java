@@ -51,7 +51,5 @@ public class GearboxAngleToolItem extends Item {
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip,
             TooltipFlag flag) {
         super.appendHoverText(stack, context, tooltip, flag);
-        tooltip.add(Component.translatable("item.cbtc.gearbox_angle_tool.hint")
-                .withStyle(ChatFormatting.GRAY));
     }
 }

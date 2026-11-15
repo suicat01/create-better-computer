@@ -334,6 +334,32 @@ public final class Devices {
         return best;
     }
 
+    /** 是否装了哨戒动力臂模组。 */
+    public static boolean hasSentry() {
+        return DeviceAccess.hasSentry();
+    }
+
+    /** 是否有任何火控单位可用：哨戒动力臂或 CBC 智能炮座。 */
+    public static boolean hasFireControl() {
+        return DeviceAccess.hasSentry() || com.mcl.cbtc.compat.cbc.CbcCannons.loaded();
+    }
+
+    /**
+     * 让哨戒动力臂进入/退出 CB 电脑接管。
+     * <p>
+     * 绑定到外设卡即接管：动力臂停止自动索敌，瞄准与射击只听从积木；
+     * 解绑后恢复原版自动攻击。坐标上的方块不是哨戒动力臂时什么也不做。
+     */
+    public static void setSentryControlled(Level level, BlockPos pos, boolean controlled) {
+        if (level == null || pos == null || !DeviceAccess.hasSentry() || !level.isLoaded(pos)) {
+            return;
+        }
+        BlockEntity be = DeviceAccess.blockEntityAt(level, pos);
+        if (be != null) {
+            com.mcl.cbtc.compat.SentryArmCompat.setControlled(be, controlled);
+        }
+    }
+
     /** 读取外设数值；外设不在线、类型不匹配或数据项不受支持时返回 0。 */
     public static double read(Level level, BlockPos pos, DeviceKind kind, DeviceKind.Data data) {
         if (kind == null || data == null) {

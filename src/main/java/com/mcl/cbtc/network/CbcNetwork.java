@@ -52,6 +52,8 @@ public final class CbcNetwork {
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onDeviceList(payload)));
         registrar.playToClient(DeviceSelectPayload.TYPE, DeviceSelectPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onDeviceSelect(payload)));
+        registrar.playToClient(SightTargetsPayload.TYPE, SightTargetsPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> ClientHandlers.onSightTargets(payload)));
         registrar.playToServer(DeviceBindPayload.TYPE, DeviceBindPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> {
                     var stack = context.player().getItemInHand(payload.hand());
@@ -77,6 +79,19 @@ public final class CbcNetwork {
                         typewriter.disconnectUser();
                     }
                 }));
+        registrar.playToServer(GunRemoteStatePayload.TYPE, GunRemoteStatePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player() instanceof net.minecraft.server.level.ServerPlayer player) {
+                        if (payload.active()) {
+                            com.mcl.cbtc.device.GunRemoteState.start(player, payload.remoteId());
+                        } else {
+                            com.mcl.cbtc.device.GunRemoteState.stop(player, payload.remoteId());
+                        }
+                    }
+                }));
+        registrar.playToServer(GunRemoteInputPayload.TYPE, GunRemoteInputPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> com.mcl.cbtc.device.GunRemoteState.setPressed(
+                        context.player(), payload.remoteId(), payload.key(), payload.down())));
         registrar.playToClient(LanJoinResultPayload.TYPE, LanJoinResultPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onLanJoinResult(payload)));
         registrar.playToServer(LanJoinPayload.TYPE, LanJoinPayload.STREAM_CODEC,
@@ -134,9 +149,9 @@ public final class CbcNetwork {
                         PacketDistributor.sendToPlayer(serverPlayer,
                                 new DeviceStatusPayload(payload.pos(), computer.deviceStatus(),
                                         computer.hasStorageModule(), computer.hasWirelessRedstoneModule(),
-                                        computer.installedLanIds(), computer.hasInternetModule(),
-                                        computer.hasSpeakerModule(), computer.hasHardDrive(),
-                                        computer.songNames(), computer.playlistIds()));
+                                        computer.hasCableModule(), computer.installedLanIds(),
+                                        computer.hasInternetModule(), computer.hasSpeakerModule(),
+                                        computer.hasHardDrive(), computer.songNames(), computer.playlistIds()));
                         PacketDistributor.sendToPlayer(serverPlayer,
                                 new WarehouseItemsPayload(payload.pos(), computer.warehouseItems()));
                         PacketDistributor.sendToPlayer(serverPlayer,

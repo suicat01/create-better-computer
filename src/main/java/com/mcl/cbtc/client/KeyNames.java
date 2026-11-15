@@ -13,6 +13,9 @@ public final class KeyNames {
     private static final Map<Integer, String> NAMES = new LinkedHashMap<>();
 
     static {
+        // 枪式遥控器把鼠标左右键当成两个"按键"，键码与 GLFW 鼠标键一致
+        NAMES.put(GLFW.GLFW_MOUSE_BUTTON_LEFT, "鼠标左键");
+        NAMES.put(GLFW.GLFW_MOUSE_BUTTON_RIGHT, "鼠标右键");
         for (char c = 'A'; c <= 'Z'; c++) {
             NAMES.put(GLFW.GLFW_KEY_A + (c - 'A'), String.valueOf(c));
         }

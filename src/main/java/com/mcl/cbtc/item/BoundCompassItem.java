@@ -84,8 +84,6 @@ public class BoundCompassItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.cbtc.bound_compass.tooltip")
-                .withStyle(ChatFormatting.GRAY));
     }
 
     /** 找到随身携带指定挂件的玩家；找不到返回 null。 */

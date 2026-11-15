@@ -1,0 +1,93 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Client",
+      "presentation": {
+        "group": "Mod Development - create-better-computer",
+        "order": 0
+      },
+      "projectName": "create-better-computer",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dcbtc%%C:\\MCl\\CBC\\create-better-computer\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Data",
+      "presentation": {
+        "group": "Mod Development - create-better-computer",
+        "order": 1
+      },
+      "projectName": "create-better-computer",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\dataRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\dataRunVmArgs.txt",
+        "-Dfml.modFolders\u003dcbtc%%C:\\MCl\\CBC\\create-better-computer\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "GameTestServer",
+      "presentation": {
+        "group": "Mod Development - create-better-computer",
+        "order": 2
+      },
+      "projectName": "create-better-computer",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\gameTestServerRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\gameTestServerRunVmArgs.txt",
+        "-Dfml.modFolders\u003dcbtc%%C:\\MCl\\CBC\\create-better-computer\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Server",
+      "presentation": {
+        "group": "Mod Development - create-better-computer",
+        "order": 3
+      },
+      "projectName": "create-better-computer",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\serverRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\MCl\\CBC\\create-better-computer\\build\\moddev\\serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dcbtc%%C:\\MCl\\CBC\\create-better-computer\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    }
+  ]
+}

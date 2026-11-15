@@ -18,12 +18,22 @@ version = mod_version
 group = mod_group_id
 
 repositories {
-    // NeoForge 官方 Maven
-    maven {
-        name = 'neoforge'
-        url = uri('https://maven.neoforged.net/releases')
+    // maven.neoforged.net 在本机不可达，用国内镜像 BMCLAPI 顶替。
+    // 该镜像对小文件校验 UA，Gradle 自带 UA 可通过。
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'bmclapiNeoForge'
+                url = uri('https://bmclapi2.bangbang93.com/maven')
+            }
+        }
+        filter {
+            // 只接管镜像确实有、而官方源连不上的构件
+            includeModule 'net.neoforged', 'neoforge'
+            includeModule 'io.github.llamalad7', 'mixinextras-neoforge'
+        }
     }
-    // DevLaunch 的本地等价仓库（按官方源码构建，见 local-maven/）
+    // DevLaunch 在所有可达镜像中都缺失，这里放的是按官方源码（tag 1.0）本地构建的等价 jar
     exclusiveContent {
         forRepository {
             maven {
@@ -35,7 +45,7 @@ repositories {
             includeModule 'net.neoforged', 'DevLaunch'
         }
     }
-    // Create 生态的依赖放在 ./libs，下载清单见 libs/README.md
+    // Create 生态的依赖放在 ./libs 下，避免每次构建都去国外 Maven 拉大文件
     flatDir { dirs 'libs' }
 }
 
@@ -149,6 +159,16 @@ dependencies {
     compileOnly files("libs/sable-companion-common-1.21.1-1.6.0.jar")
     // 网络音乐机（netmusic）联动：同样只做编译期可见，运行期按需装载
     compileOnly files("libs/${netmusic_jar}")
+    // 线控驾驶（Drive-By-Wire with Sable）联动：同样只做编译期可见，运行期按需装载
+    compileOnly files("libs/${drivebywire_jar}")
+    // 雷达（Create: Radars）联动：编译期可见，运行期按需装载
+    compileOnly files("libs/${radar_jar}")
+    // 加农炮（Create Big Cannons）联动：编译期可见，运行期按需装载
+    compileOnly files("libs/${cbc_jar}")
+    // 哨戒机械臂（Create: Sentry Mechanical Arm）联动：编译期可见，运行期按需装载
+    compileOnly files("libs/${sentry_jar}")
+    // 枪械（TaCZ）联动：哨戒机械臂的前置，同样只做编译期可见
+    compileOnly files("libs/${tacz_jar}")
 
     // JEI（配方查看/编辑）：编译期用完整 jar 提供 API；运行期由 syncRunMods 放进 run/mods
     compileOnly files("libs/jei-1.21.1-neoforge-${jei_version}.jar")
@@ -176,6 +196,16 @@ var syncRunMods = tasks.register('syncRunMods', Copy) {
     }
     from('libs') {
         include "${netmusic_jar}"
+    }
+    from('libs') {
+        include "${drivebywire_jar}"
+    }
+    from('libs') {
+        include "${radar_jar}"
+        include "${cbc_jar}"
+        include "${rpl_jar}"
+        include "${sentry_jar}"
+        include "${tacz_jar}"
     }
     from('libs') {
         include "jei-1.21.1-neoforge-${jei_version}.jar"

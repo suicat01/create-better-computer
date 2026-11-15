@@ -16,6 +16,12 @@
 | `sable-neoforge-1.21.1-2.0.6.jar` | 是 | Sable 官方发布页 https://modrinth.com/mod/sable |
 | `sable-companion-common-1.21.1-1.6.0.jar` | 是 | 从 Sable 的 jar 内解出（内嵌依赖） |
 | `netmusic-1.4.0-neoforge+mc1.21.1.jar` | 否（软依赖） | 网络音乐机的作者发布页 |
+| `drivebywire-0.3.0.jar` | 是（编译，运行期软依赖） | Drive-By-Wire with Sable 官方发布页 https://modrinth.com/mod/drive-by-wire-sable |
+| `create_radar-5.1.0-1.21.1.jar` | 是（编译，运行期软依赖） | Create: Radars 官方发布页 https://modrinth.com/mod/create-radars |
+| `createbigcannons-5.11.7+mc.1.21.1.jar` | 是（编译，运行期软依赖） | Create Big Cannons 官方发布页 https://modrinth.com/mod/create-big-cannons |
+| `ritchiesprojectilelib-2.1.2+mc.1.21.1-neoforge.jar` | 是（运行期，CBC 的前置） | Ritchie's Projectile Library https://modrinth.com/mod/rpl |
+| `sentrymechanicalarm-neoforge-1.21.1-1.4.0-alpha.42.jar` | 是（编译，运行期软依赖） | Create: Sentry Mechanical Arm 上游只有源码，需自行 `gradlew build`：https://github.com/qwer854645/Create-SentryMechanicalArm1.21.1 |
+| `tacz-neoforge-1.21.1-1.2.0.jar` | 是（编译，运行期软依赖） | TaCZ 官方发布页 https://modrinth.com/mod/timeless-and-classics-zero （哨戒机械臂的前置） |
 
 `aeronautics/` 子目录需要下列三个文件，均来自 Create Aeronautics 官方发布页 https://modrinth.com/mod/create-aeronautics （该整合包以嵌套 jar 形式分发，解开后取出）：
 

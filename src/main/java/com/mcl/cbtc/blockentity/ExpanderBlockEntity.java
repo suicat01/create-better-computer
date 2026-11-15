@@ -76,6 +76,11 @@ public class ExpanderBlockEntity extends BlockEntity implements Container, net.m
         return items.stream().anyMatch(stack -> stack.getItem() instanceof com.mcl.cbtc.item.SpeakerModuleItem);
     }
 
+    /** 是否装了线缆升级模块卡：决定拓展器能否作为线缆信号源。 */
+    public boolean hasCableModule() {
+        return items.stream().anyMatch(stack -> stack.getItem() instanceof com.mcl.cbtc.item.CableModuleItem);
+    }
+
     /** 是否装了硬盘。 */
     public boolean hasHardDrive() {
         return hardDrive() != null;

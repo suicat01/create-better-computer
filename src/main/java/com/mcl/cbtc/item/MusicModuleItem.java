@@ -164,7 +164,6 @@ public class MusicModuleItem extends UpgradeModuleItem {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         UUID id = id(stack);
-        tooltip.add(Component.translatable("item.cbtc.music_module.tooltip").withStyle(ChatFormatting.GRAY));
         tooltip.add(Component.translatable("item.cbtc.music_module.count", playlist(stack).size())
                 .withStyle(ChatFormatting.AQUA));
         if (id != null) {
