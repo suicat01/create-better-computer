@@ -1,5 +1,7 @@
 package com.mcl.cbtc.blockentity;
 
+import com.mcl.cbtc.device.DeviceIdentity;
+import com.mcl.cbtc.device.Devices;
 import com.mcl.cbtc.registry.CbcBlockEntities;
 import com.simibubi.create.content.kinetics.transmission.SplitShaftBlockEntity;
 import com.simibubi.create.content.kinetics.motor.KineticScrollValueBehaviour;
@@ -15,6 +17,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 智能转速控制器的方块实体。
@@ -24,12 +27,41 @@ import net.minecraft.world.phys.Vec3;
  * <p>
  * 拉条本身是原版 {@link KineticScrollValueBehaviour}，右键点拉条弹出原版数值选择界面。
  */
-public class SmartSpeedControllerBlockEntity extends SplitShaftBlockEntity {
+public class SmartSpeedControllerBlockEntity extends SplitShaftBlockEntity implements DeviceIdentity {
     /** 拉条设定值（RPM，带符号）。 */
     public KineticScrollValueBehaviour targetSpeed;
+    /** 方块外设的持久身份：绑定靠它指到这台方块，结构搬动也不丢。 */
+    @Nullable
+    private java.util.UUID deviceId;
 
     public SmartSpeedControllerBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.SPEED_CONTROLLER.get(), pos, state);
+    }
+
+    @Nullable
+    @Override
+    public java.util.UUID deviceId() {
+        return deviceId;
+    }
+
+    @Override
+    public void setDeviceId(@Nullable java.util.UUID id) {
+        deviceId = id;
+        setChanged();
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        Devices.registerIdentity(level, this);
+    }
+
+    // setRemoved 在 Create 的 SmartBlockEntity 里是 final：区块卸载也会走到那里，
+    // 而 remove() 只在方块真的被移除时调用，正好用来注销身份
+    @Override
+    public void remove() {
+        Devices.forgetIdentity(level, this);
+        super.remove();
     }
 
     @Override
@@ -123,6 +155,7 @@ public class SmartSpeedControllerBlockEntity extends SplitShaftBlockEntity {
         if (targetSpeed != null) {
             tag.putInt("TargetSpeed", targetSpeed.getValue());
         }
+        DeviceIdentity.writeId(tag, deviceId);
     }
 
     @Override
@@ -131,6 +164,7 @@ public class SmartSpeedControllerBlockEntity extends SplitShaftBlockEntity {
         if (targetSpeed != null && tag.contains("TargetSpeed")) {
             targetSpeed.value = tag.getInt("TargetSpeed");
         }
+        deviceId = DeviceIdentity.readId(tag);
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.mcl.cbtc.blockentity;
 
+import com.mcl.cbtc.device.DeviceIdentity;
+import com.mcl.cbtc.device.Devices;
 import com.mcl.cbtc.registry.CbcBlockEntities;
 import com.simibubi.create.content.kinetics.transmission.sequencer.Instruction;
 import com.simibubi.create.content.kinetics.transmission.sequencer.InstructionSpeedModifiers;
@@ -11,6 +13,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * CB编程齿轮箱的方块实体。
@@ -23,7 +26,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * 与原版唯一的区别是“谁往里写指令”：原版由配置界面写，
  * 本类由积木指令写。
  */
-public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
+public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity implements DeviceIdentity {
     /** 角度比较容差（度）。 */
     public static final double ANGLE_EPSILON = 0.5;
 
@@ -68,9 +71,38 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
     private boolean trackShortest;
     /** 非最短路径跟随时的绕行方向：true 表示逆时针。 */
     private boolean trackCounterClockwise;
+    /** 方块外设的持久身份：绑定靠它指到这台方块，结构搬动也不丢。 */
+    @Nullable
+    private java.util.UUID deviceId;
 
     public CBGearboxBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.GEARBOX.get(), pos, state);
+    }
+
+    @Nullable
+    @Override
+    public java.util.UUID deviceId() {
+        return deviceId;
+    }
+
+    @Override
+    public void setDeviceId(@Nullable java.util.UUID id) {
+        deviceId = id;
+        setChanged();
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        Devices.registerIdentity(level, this);
+    }
+
+    // setRemoved 在 Create 的 SmartBlockEntity 里是 final：区块卸载也会走到那里，
+    // 而 remove() 只在方块真的被移除时调用，正好用来注销身份
+    @Override
+    public void remove() {
+        Devices.forgetIdentity(level, this);
+        super.remove();
     }
 
     /**
@@ -503,6 +535,7 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         if (!Double.isNaN(pendingBookDelta)) {
             tag.putDouble("CbcPendingBook", pendingBookDelta);
         }
+        DeviceIdentity.writeId(tag, deviceId);
     }
 
     @Override
@@ -519,5 +552,6 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         bookAngle = tag.contains("CbcBookAngle") ? tag.getDouble("CbcBookAngle") : angleAccum;
         pendingBookDelta = tag.contains("CbcPendingBook")
                 ? tag.getDouble("CbcPendingBook") : Double.NaN;
+        deviceId = DeviceIdentity.readId(tag);
     }
 }

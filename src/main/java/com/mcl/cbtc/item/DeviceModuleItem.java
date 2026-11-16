@@ -34,6 +34,13 @@ import org.jetbrains.annotations.Nullable;
  */
 public class DeviceModuleItem extends UpgradeModuleItem {
     private static final String DEVICES = "PeripheralDevices";
+    /**
+     * 方块外设自身的身份 UUID。
+     * <p>
+     * 绑定以它为主线索：结构组装、拆卸、跨维度移动只改变方块的位置，不改变"它是谁"，
+     * 所以坐标过期时仍然能靠它找回来。外部模组方块没法存 UUID，这个字段为空，仍按坐标定位。
+     */
+    private static final String DEV_ID = "DevId";
 
     /** 服务端权威的"已选中"记录：玩家 UUID → 选中的外设。 */
     private static final java.util.Map<java.util.UUID, Selection> SELECTIONS = new java.util.concurrent.ConcurrentHashMap<>();
@@ -176,6 +183,8 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         BlockPos storePos = canonical.pos();
         UUID subLevelId = canonical.subLevelId();
         BlockPos worldPos = currentWorldPos(level, canonical, target.pos());
+        // 方块自己的身份才是绑定的主键；外部模组方块没有身份，返回 null 时退回坐标
+        UUID identity = com.mcl.cbtc.device.Devices.ensureIdentity(level, target.pos());
 
         CompoundTag tag = tag(stack);
         ListTag entries = tag.getList(DEVICES, Tag.TAG_COMPOUND);
@@ -204,6 +213,9 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         entry.putLong("World", worldPos.asLong());
         entry.putString("Name", name == null || name.isBlank() ? defaultName : name.trim());
         entry.putString("Kind", target.kind().id());
+        if (identity != null) {
+            entry.putString(DEV_ID, identity.toString());
+        }
         if (index >= 0) {
             entries.set(index, entry);
         } else {
@@ -213,6 +225,7 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         // 注册/刷新定位缓存，物理结构组装/拆卸时据此换算坐标
         com.mcl.cbtc.device.Devices.registerLocation(level, entry.getString("Id"), canonical, target.kind());
+        com.mcl.cbtc.device.Devices.bindIdentity(entry.getString("Id"), identity);
         // 绑定哨戒动力臂即由电脑接管：关闭自动索敌，瞄准与射击交给积木
         if (target.kind() == DeviceKind.SENTRY_ARM) {
             com.mcl.cbtc.device.Devices.setSentryControlled(level, target.pos(), true);
@@ -286,6 +299,11 @@ public class DeviceModuleItem extends UpgradeModuleItem {
      */
     private static boolean sameDevice(Level level, CompoundTag entry, BlockPos clicked, BlockPos storePos,
                                       java.util.UUID subLevelId) {
+        java.util.UUID identity = readIdentity(entry);
+        if (identity != null && identity.equals(com.mcl.cbtc.device.Devices.identityAt(level, clicked))) {
+            // 方块自己的身份一致就是同一台，坐标怎么变都不影响
+            return true;
+        }
         return sameDevice(level, clicked, storePos, subLevelId,
                 BlockPos.of(entry.getLong("Pos")), readSubLevel(entry));
     }
@@ -324,6 +342,20 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         }
     }
 
+    /** 绑定记录里方块外设自身的身份；外部模组方块或旧存档里没有时返回 null。 */
+    @Nullable
+    private static java.util.UUID readIdentity(CompoundTag entry) {
+        String raw = entry.getString(DEV_ID);
+        if (raw.isBlank()) {
+            return null;
+        }
+        try {
+            return java.util.UUID.fromString(raw);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private static void unbind(ItemStack stack, Level level, Binding target) {
         com.mcl.cbtc.device.Devices.DeviceLocation loc =
                 com.mcl.cbtc.device.Devices.normalizeLocation(level,
@@ -340,6 +372,7 @@ public class DeviceModuleItem extends UpgradeModuleItem {
                     && sameDevice(level, compound, target.pos(), storePos, subLevelId);
             if (matches) {
                 com.mcl.cbtc.device.Devices.removeLocation(compound.getString("Id"));
+                com.mcl.cbtc.device.Devices.unbindIdentity(compound.getString("Id"));
                 // 解绑哨戒动力臂：恢复它自己的自动索敌与自动开火
                 if (target.kind() == DeviceKind.SENTRY_ARM) {
                     com.mcl.cbtc.device.Devices.setSentryControlled(level, target.pos(), false);
@@ -405,6 +438,7 @@ public class DeviceModuleItem extends UpgradeModuleItem {
                 }
             }
             java.util.UUID storedSub = readSubLevel(entry);
+            java.util.UUID identity = readIdentity(entry);
             BlockPos worldFallback = entry.contains("World") ? BlockPos.of(entry.getLong("World")) : null;
             com.mcl.cbtc.device.Devices.DeviceLocation canonical =
                     new com.mcl.cbtc.device.Devices.DeviceLocation(storedSub, storedPos);
@@ -413,10 +447,37 @@ public class DeviceModuleItem extends UpgradeModuleItem {
                         com.mcl.cbtc.device.Devices.currentLocation(recordLevel, id);
                 java.util.Set<BlockPos> taken = claimed.computeIfAbsent(dim,
                         key -> new java.util.HashSet<>());
-                com.mcl.cbtc.device.Devices.DeviceLocation resolved = resolveBinding(
-                        recordLevel, kind, cached != null ? cached : canonical, worldFallback, taken);
+                // 身份是主线索：方块结构怎么搬，它还是同一台
+                com.mcl.cbtc.device.Devices.DeviceLocation resolved = identity == null ? null
+                        : com.mcl.cbtc.device.Devices.identityLocation(recordLevel, identity);
+                if (resolved == null) {
+                    resolved = resolveBinding(
+                            recordLevel, kind, cached != null ? cached : canonical, worldFallback, taken, identity);
+                }
                 if (resolved != null) {
                     canonical = resolved;
+                }
+                // 旧存档第一次读取时把方块自己的身份补进记录，之后就不再依赖坐标
+                java.util.UUID actualIdentity =
+                        com.mcl.cbtc.device.Devices.identityAt(recordLevel, canonical.pos());
+                boolean adopted = false;
+                if (actualIdentity == null && identity != null
+                        && com.mcl.cbtc.device.Devices.kindAt(recordLevel, canonical.pos()) == kind) {
+                    // 原方块被拆掉后原地放了同型号的新方块：给它一个身份，绑定跟着这块继续用
+                    actualIdentity = com.mcl.cbtc.device.Devices.ensureIdentity(recordLevel, canonical.pos());
+                    adopted = actualIdentity != null;
+                }
+                if (identity != null && actualIdentity != null && !adopted
+                        && !identity.equals(actualIdentity)) {
+                    // 坐标上已经是另一台外设：保留原记录，等身份索引重新命中，绝不改绑到它身上
+                    canonical = new com.mcl.cbtc.device.Devices.DeviceLocation(storedSub, storedPos);
+                } else if (actualIdentity != null
+                        && (identity == null || identity.equals(actualIdentity) || adopted)) {
+                    com.mcl.cbtc.device.Devices.bindIdentity(id, actualIdentity);
+                    if (!actualIdentity.equals(identity)) {
+                        entry.putString(DEV_ID, actualIdentity.toString());
+                        changed = true;
+                    }
                 }
                 taken.add(canonical.pos());
                 com.mcl.cbtc.device.Devices.registerLocation(recordLevel, id, canonical, kind);
@@ -468,35 +529,44 @@ public class DeviceModuleItem extends UpgradeModuleItem {
      * <p>
      * {@code claimed} 是本卡里已经被别的记录占用的方块位置：按坐标就近找回同类外设时必须跳过，
      * 否则挨着放的同类外设会一起塌到同一块上，两条绑定重合后连线角度只能算出 NaN。
+     * <p>
+     * {@code identity} 是记录里的方块身份：候选方块自己带别的身份时一律不认，
+     * 避免"按坐标就近找回"把绑定指到旁边另一台同型号外设上。
      */
     @Nullable
     private static com.mcl.cbtc.device.Devices.DeviceLocation resolveBinding(Level level, DeviceKind kind,
             @Nullable com.mcl.cbtc.device.Devices.DeviceLocation base, @Nullable BlockPos worldFallback,
-            java.util.Set<BlockPos> claimed) {
+            java.util.Set<BlockPos> claimed, @Nullable java.util.UUID identity) {
         com.mcl.cbtc.device.Devices.DeviceLocation normalized =
                 com.mcl.cbtc.device.Devices.normalizeLocation(level, base);
-        if (validDevice(level, normalized, kind) && !claimed.contains(normalized.pos())) {
+        if (validDevice(level, normalized, kind, identity) && !claimed.contains(normalized.pos())) {
             return normalized;
         }
         if (worldFallback != null) {
             com.mcl.cbtc.device.Devices.DeviceLocation fromWorld =
                     com.mcl.cbtc.device.Devices.normalizeLocation(
                             level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, worldFallback));
-            if (validDevice(level, fromWorld, kind) && !claimed.contains(fromWorld.pos())) {
+            if (validDevice(level, fromWorld, kind, identity) && !claimed.contains(fromWorld.pos())) {
                 return fromWorld;
             }
-            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, worldFallback, kind, 2, claimed);
-            if (near != null) {
-                return com.mcl.cbtc.device.Devices.normalizeLocation(
-                        level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, near));
+            // 飞行器落地位置和上次记录的坐标可能差出十几格（飞行中读到的坐标是旧的），
+            // 只搜 2 格必然漏掉，这里逐级放宽。
+            for (int radius : new int[]{2, 4, 8, 16}) {
+                BlockPos near = findNear(level, worldFallback, kind, radius, claimed, identity);
+                if (near != null) {
+                    return com.mcl.cbtc.device.Devices.normalizeLocation(
+                            level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, near));
+                }
             }
         }
-        if (normalized != null) {
+        if (normalized != null && !com.mcl.cbtc.device.Devices.isStoragePos(level, normalized.pos())) {
+            // 只在主世界坐标里按类型就近找回。存储区里相邻地址属于别的物理结构，
+            // 在那附近找同类外设会把两条绑定绑到同一块上，越修越乱。
             BlockPos pos = normalized.pos();
-            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, pos, kind, 2, claimed);
+            BlockPos near = findNear(level, pos, kind, 2, claimed, identity);
             if (near == null && claimed.contains(pos)) {
                 // 记录本身已经和别的绑定重合：在稍大范围里再找一台没被占用的同类外设
-                near = com.mcl.cbtc.device.Devices.findKindNear(level, pos, kind, 4, claimed);
+                near = findNear(level, pos, kind, 4, claimed, identity);
             }
             if (near != null) {
                 return com.mcl.cbtc.device.Devices.normalizeLocation(
@@ -511,13 +581,38 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         return normalized;
     }
 
+    /** 按类型就近找回，同时排除身份对不上的方块。 */
+    @Nullable
+    private static BlockPos findNear(Level level, BlockPos from, DeviceKind kind, int radius,
+                                     java.util.Set<BlockPos> claimed, @Nullable java.util.UUID identity) {
+        BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, from, kind, radius, claimed);
+        if (near == null || identityCompatible(level, near, identity)) {
+            return near;
+        }
+        // 最近的那块是另一台外设：把已占位置扩出去再找一次，不能直接认领
+        java.util.Set<BlockPos> exclude = new java.util.HashSet<>(claimed);
+        exclude.add(near);
+        BlockPos next = com.mcl.cbtc.device.Devices.findKindNear(level, from, kind, radius, exclude);
+        return next != null && identityCompatible(level, next, identity) ? next : null;
+    }
+
+    /** 候选方块的身份是否与记录一致；候选还没有身份（旧存档、外部模组方块）时视为兼容。 */
+    private static boolean identityCompatible(Level level, BlockPos pos, @Nullable java.util.UUID identity) {
+        if (identity == null) {
+            return true;
+        }
+        java.util.UUID actual = com.mcl.cbtc.device.Devices.identityAt(level, pos);
+        return actual == null || actual.equals(identity);
+    }
+
     private static boolean validDevice(Level level,
                                        @Nullable com.mcl.cbtc.device.Devices.DeviceLocation loc,
-                                       DeviceKind kind) {
+                                       DeviceKind kind, @Nullable java.util.UUID identity) {
         if (loc == null) {
             return false;
         }
-        return com.mcl.cbtc.device.Devices.kindAt(level, loc.pos()) == kind;
+        return com.mcl.cbtc.device.Devices.kindAt(level, loc.pos()) == kind
+                && identityCompatible(level, loc.pos(), identity);
     }
 
     /** 记录一个当前世界坐标，供结构被拆掉且缓存丢失时找回绑定。 */

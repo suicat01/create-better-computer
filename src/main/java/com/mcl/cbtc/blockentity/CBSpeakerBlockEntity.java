@@ -1,5 +1,7 @@
 package com.mcl.cbtc.blockentity;
 
+import com.mcl.cbtc.device.DeviceIdentity;
+import com.mcl.cbtc.device.Devices;
 import com.mcl.cbtc.menu.SpeakerMenu;
 import com.mcl.cbtc.registry.CbcBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -24,7 +26,8 @@ import org.jetbrains.annotations.Nullable;
  * 装了扬声器升级是 {@link #RANGE_UPGRADED} 格。
  * 电脑自己装的扬声器模块不会影响这里，两者互不相干。
  */
-public class CBSpeakerBlockEntity extends BlockEntity implements Container, net.minecraft.world.MenuProvider, SoundDevice {
+public class CBSpeakerBlockEntity extends BlockEntity implements Container, net.minecraft.world.MenuProvider, SoundDevice,
+        DeviceIdentity {
     /** 未升级时的声音传播范围（格）。 */
     public static final int RANGE_BASE = 20;
     /** 装入扬声器升级后的传播范围（格）。 */
@@ -34,9 +37,36 @@ public class CBSpeakerBlockEntity extends BlockEntity implements Container, net.
 
     private final NonNullList<ItemStack> items =
             NonNullList.withSize(SLOTS, ItemStack.EMPTY);
+    /** 方块外设的持久身份：绑定靠它指到这台方块，结构搬动也不丢。 */
+    @Nullable
+    private java.util.UUID deviceId;
 
     public CBSpeakerBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.SPEAKER.get(), pos, state);
+    }
+
+    @Nullable
+    @Override
+    public java.util.UUID deviceId() {
+        return deviceId;
+    }
+
+    @Override
+    public void setDeviceId(@Nullable java.util.UUID id) {
+        deviceId = id;
+        setChanged();
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        Devices.registerIdentity(level, this);
+    }
+
+    @Override
+    public void setRemoved() {
+        Devices.forgetIdentity(level, this);
+        super.setRemoved();
     }
 
     /** 是否装了扬声器升级。 */
@@ -124,6 +154,7 @@ public class CBSpeakerBlockEntity extends BlockEntity implements Container, net.
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         ContainerHelper.saveAllItems(tag, items, registries);
+        DeviceIdentity.writeId(tag, deviceId);
     }
 
     @Override
@@ -131,6 +162,7 @@ public class CBSpeakerBlockEntity extends BlockEntity implements Container, net.
         super.loadAdditional(tag, registries);
         items.clear();
         ContainerHelper.loadAllItems(tag, items, registries);
+        deviceId = DeviceIdentity.readId(tag);
     }
 
     /** 把升级槽里的模块卡写进物品的方块实体数据，拆下再放回时原样恢复。 */

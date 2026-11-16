@@ -63,6 +63,185 @@ public final class Devices {
     private static final java.util.Map<String, Cached> CURRENT_LOCATIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /**
+     * 各外设最近一次解析出的主世界坐标。
+     * <p>
+     * 结构拆卸时方块会被放回主世界，靠结构姿态换算出的坐标在姿态尚未更新时会偏几格；
+     * 而"上次还在这个坐标"是直接证据，用它当地找回的起点，比姿态可靠得多。
+     */
+    private static final java.util.Map<String, Vec3> LAST_WORLD =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 记下一次成功解析的主世界坐标。 */
+    private static Vec3 rememberWorld(String deviceId, Vec3 world) {
+        if (deviceId != null && !deviceId.isBlank() && world != null) {
+            LAST_WORLD.put(deviceId, world);
+        }
+        return world;
+    }
+
+    /** 该外设最近一次已知的主世界坐标；没有记录时返回 null。 */
+    @Nullable
+    public static Vec3 lastWorld(String deviceId) {
+        return deviceId == null ? null : LAST_WORLD.get(deviceId);
+    }
+
+    /** 身份索引条目：方块自己登记的当前位置。 */
+    private record IdentityEntry(ResourceLocation dimension, BlockPos pos) {
+    }
+
+    /**
+     * 方块外设的持久身份索引：UUID → 方块自己登记的位置（只记服务端）。
+     * <p>
+     * 方块实体每次加载都会登记一次，所以结构被搬动、重新组装后这里总是最新的；
+     * 索引丢失（服务器重启、区块没加载）时退回绑定记录里的坐标，靠坐标把区块加载出来后
+     * 读方块自己的 UUID 再补回索引，绑定本身不需要玩家重做。
+     */
+    private static final java.util.Map<java.util.UUID, IdentityEntry> IDENTITY_INDEX =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 绑定记录 ID → 方块外设身份 UUID。 */
+    private static final java.util.Map<String, java.util.UUID> BINDING_IDS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 方块实体加载时登记自己的身份（由各方块实体的 onLoad 调用）。 */
+    public static void registerIdentity(Level level, BlockEntity be) {
+        if (level == null || level.isClientSide || !(be instanceof DeviceIdentity identity)) {
+            return;
+        }
+        java.util.UUID id = identity.deviceId();
+        if (id == null) {
+            return;
+        }
+        IDENTITY_INDEX.put(id, new IdentityEntry(level.dimension().location(), be.getBlockPos().immutable()));
+        DeviceLocation loc = locationOf(level, be);
+        if (loc == null) {
+            return;
+        }
+        if (loc.subLevelId() == null && looksLikeSubLevelCoords(level, loc.pos())) {
+            // 物理结构容器还没就绪，暂时认不出结构内坐标；索引已经记好，缓存交给组装回调修正
+            return;
+        }
+        // 已经绑定过这台外设的卡立刻跟上，不必等下一次读取纠错
+        for (var e : BINDING_IDS.entrySet()) {
+            if (!id.equals(e.getValue())) {
+                continue;
+            }
+            Cached old = CURRENT_LOCATIONS.get(e.getKey());
+            CURRENT_LOCATIONS.put(e.getKey(), new Cached(loc,
+                    old != null && old.kind() != null ? old.kind() : DeviceReaders.kindOf(be),
+                    level.dimension().location()));
+        }
+    }
+
+    /** 方块实体被移除时注销身份；位置已经被新方块登记过时不动索引。 */
+    public static void forgetIdentity(Level level, BlockEntity be) {
+        if (level == null || level.isClientSide || !(be instanceof DeviceIdentity identity)) {
+            return;
+        }
+        java.util.UUID id = identity.deviceId();
+        if (id == null) {
+            return;
+        }
+        IdentityEntry entry = IDENTITY_INDEX.get(id);
+        if (entry != null && entry.dimension() != null
+                && entry.dimension().equals(level.dimension().location())
+                && entry.pos().equals(be.getBlockPos())) {
+            IDENTITY_INDEX.remove(id, entry);
+        }
+    }
+
+    /** 按身份取方块实体；索引里没有、维度不符或位置已被别的方块占用时返回 null。 */
+    @Nullable
+    public static BlockEntity blockEntityByIdentity(Level level, @Nullable java.util.UUID id) {
+        if (level == null || id == null) {
+            return null;
+        }
+        IdentityEntry entry = IDENTITY_INDEX.get(id);
+        if (entry == null || entry.dimension() == null
+                || !entry.dimension().equals(level.dimension().location())) {
+            return null;
+        }
+        if (!level.isLoaded(entry.pos())) {
+            return null;
+        }
+        BlockEntity be = level.getBlockEntity(entry.pos());
+        if (be instanceof DeviceIdentity identity && id.equals(identity.deviceId())) {
+            return be;
+        }
+        if (be != null) {
+            // 那个位置已经是别的方块了，索引过期
+            IDENTITY_INDEX.remove(id, entry);
+        }
+        return null;
+    }
+
+    /** 绑定记录对应的方块外设当前定位；索引里没有时返回 null。 */
+    @Nullable
+    public static DeviceLocation identityLocation(Level level, @Nullable java.util.UUID id) {
+        return locationOf(level, blockEntityByIdentity(level, id));
+    }
+
+    /** 方块实体当前的绑定定位（在结构里时带结构 UUID）。 */
+    @Nullable
+    public static DeviceLocation locationOf(Level level, @Nullable BlockEntity be) {
+        if (level == null || be == null) {
+            return null;
+        }
+        DeviceLocation loc = locate(level, be.getBlockPos());
+        return loc != null ? loc : new DeviceLocation(null, be.getBlockPos().immutable());
+    }
+
+    /** 坐标上方块实体的身份；不是本模组外设或旧存档还没写入身份时返回 null。 */
+    @Nullable
+    public static java.util.UUID identityAt(Level level, BlockPos pos) {
+        if (level == null || pos == null || !level.isLoaded(pos)) {
+            return null;
+        }
+        BlockEntity be = DeviceAccess.blockEntityAt(level, pos);
+        return be instanceof DeviceIdentity identity ? identity.deviceId() : null;
+    }
+
+    /** 取坐标上方块实体的身份，没有就生成并登记；不是本模组外设时返回 null。 */
+    @Nullable
+    public static java.util.UUID ensureIdentity(Level level, BlockPos pos) {
+        if (level == null || pos == null || !level.isLoaded(pos)) {
+            return null;
+        }
+        BlockEntity be = DeviceAccess.blockEntityAt(level, pos);
+        if (!(be instanceof DeviceIdentity identity)) {
+            return null;
+        }
+        java.util.UUID id = identity.ensureDeviceId();
+        registerIdentity(level, be);
+        return id;
+    }
+
+    /** 绑定记录对应的方块外设身份；旧存档或外部模组方块返回 null。 */
+    @Nullable
+    public static java.util.UUID identityOf(String deviceId) {
+        return deviceId == null ? null : BINDING_IDS.get(deviceId);
+    }
+
+    /** 把绑定记录挂到一台方块外设的身份上。 */
+    public static void bindIdentity(String deviceId, @Nullable java.util.UUID id) {
+        if (deviceId == null || deviceId.isBlank()) {
+            return;
+        }
+        if (id == null) {
+            BINDING_IDS.remove(deviceId);
+        } else {
+            BINDING_IDS.put(deviceId, id);
+        }
+    }
+
+    /** 解绑时断开身份关联。 */
+    public static void unbindIdentity(String deviceId) {
+        if (deviceId != null) {
+            BINDING_IDS.remove(deviceId);
+        }
+    }
+
     /** 连线求角失败告警的节流表：key → 上次输出时的游戏刻。 */
     private static final java.util.Map<String, Long> BEARING_DIAG_COOLDOWN =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -128,6 +307,7 @@ public final class Devices {
     public static void removeLocation(String deviceId) {
         if (deviceId != null) {
             CURRENT_LOCATIONS.remove(deviceId);
+            LAST_WORLD.remove(deviceId);
         }
     }
 
@@ -173,9 +353,31 @@ public final class Devices {
         return level.getBlockEntity(location.pos());
     }
 
-    /** 按当前定位取方块实体：优先缓存定位，其次绑定记录坐标。 */
+    /** 按身份命中方块后，把缓存与最近世界坐标一起校正到它此刻的位置。 */
+    private static void refreshFromIdentity(Level level, String deviceId, BlockEntity be) {
+        DeviceLocation loc = locationOf(level, be);
+        if (loc == null) {
+            return;
+        }
+        Cached old = CURRENT_LOCATIONS.get(deviceId);
+        CURRENT_LOCATIONS.put(deviceId, new Cached(loc,
+                old != null && old.kind() != null ? old.kind() : DeviceReaders.kindOf(be),
+                level.dimension().location()));
+        Vec3 world = worldPos(level, loc);
+        if (world != null && !looksLikeSubLevelCoords(level, BlockPos.containing(world))) {
+            LAST_WORLD.put(deviceId, world);
+        }
+    }
+
+    /** 按当前定位取方块实体：优先身份，其次缓存定位，最后绑定记录坐标。 */
     @Nullable
     public static BlockEntity blockEntityAt(Level level, String deviceId, DeviceLocation fallback) {
+        // 方块自己带身份时直接问索引：结构搬过、坐标过期都不影响
+        BlockEntity identified = blockEntityByIdentity(level, identityOf(deviceId));
+        if (identified != null) {
+            refreshFromIdentity(level, deviceId, identified);
+            return identified;
+        }
         DeviceLocation loc = currentLocation(level, deviceId);
         if (loc == null) {
             loc = fallback;
@@ -183,11 +385,75 @@ public final class Devices {
         if (loc == null) {
             return null;
         }
+        java.util.UUID expected = identityOf(deviceId);
         BlockEntity be = blockEntityAt(level, normalizeLocation(level, loc));
         if (be != null) {
-            return be;
+            return acceptedByIdentity(level, deviceId, expected, be);
         }
-        return blockEntityAt(level, loc);
+        be = blockEntityAt(level, loc);
+        if (be != null) {
+            return acceptedByIdentity(level, deviceId, expected, be);
+        }
+        // 最后兜底：原地取不到方块时按类型就近找回一块并刷新缓存。
+        // 结构化位置不能直接当主世界坐标搜（那是别的结构的地盘），
+        // 这种记录改用"上次解析到的世界坐标"作为搜索起点。
+        Cached cached = CURRENT_LOCATIONS.get(deviceId);
+        if (cached == null || cached.kind() == null) {
+            return null;
+        }
+        BlockPos searchFrom;
+        int radius;
+        if (loc.subLevelId() == null && !looksLikeSubLevelCoords(level, loc.pos())) {
+            searchFrom = loc.pos();
+            radius = 4;
+        } else {
+            Vec3 known = LAST_WORLD.get(deviceId);
+            if (known == null) {
+                return null;
+            }
+            searchFrom = BlockPos.containing(known);
+            radius = 16;
+        }
+        java.util.Set<BlockPos> taken = new java.util.HashSet<>();
+        for (var e : CURRENT_LOCATIONS.entrySet()) {
+            if (!e.getKey().equals(deviceId) && e.getValue().location() != null) {
+                taken.add(e.getValue().location().pos());
+            }
+        }
+        BlockPos near = findKindNear(level, searchFrom, cached.kind(), radius, taken);
+        if (near == null) {
+            return null;
+        }
+        BlockEntity found = level.getBlockEntity(near);
+        if (!sameIdentity(expected, found)) {
+            // 附近这块不是绑定的那台外设，绝不把缓存改到它身上
+            return null;
+        }
+        CURRENT_LOCATIONS.put(deviceId, new Cached(new DeviceLocation(null, near), cached.kind(), cached.dimension()));
+        LAST_WORLD.put(deviceId, Vec3.atCenterOf(near));
+        com.mcl.cbtc.CreateBetterComputer.LOGGER.debug("外设绑定：{} 读取时就近找回为 {}", deviceId, near);
+        return found;
+    }
+
+    /** 方块实体与绑定记录里的身份是否一致；记录没有身份（外部模组方块）时不做校验。 */
+    private static boolean sameIdentity(@Nullable java.util.UUID expected, @Nullable BlockEntity be) {
+        if (expected == null) {
+            return be != null;
+        }
+        return be instanceof DeviceIdentity identity && expected.equals(identity.deviceId());
+    }
+
+    /** 坐标解析出的方块要再过一遍身份校验；命中时顺手把缓存校正到它此刻的位置。 */
+    @Nullable
+    private static BlockEntity acceptedByIdentity(Level level, String deviceId,
+                                                  @Nullable java.util.UUID expected, BlockEntity be) {
+        if (!sameIdentity(expected, be)) {
+            return null;
+        }
+        if (expected != null) {
+            refreshFromIdentity(level, deviceId, be);
+        }
+        return be;
     }
 
     /**
@@ -212,6 +478,17 @@ public final class Devices {
                 continue;
             }
             DeviceLocation loc = cached.location();
+            // 方块自己带身份时直接问索引，不必按坐标或类型去猜
+            DeviceLocation owned = identityLocation(level, identityOf(e.getKey()));
+            if (owned != null && added.equals(owned.subLevelId())) {
+                used.add(owned.pos());
+                if (!owned.equals(loc)) {
+                    e.setValue(new Cached(owned, cached.kind(), cached.dimension()));
+                    com.mcl.cbtc.CreateBetterComputer.LOGGER.debug("外设绑定：{} 按身份定位到结构内 {}",
+                            e.getKey(), owned);
+                }
+                continue;
+            }
             java.util.Set<BlockPos> occupiedByOthers = new java.util.HashSet<>(used);
             occupiedByOthers.remove(loc.pos());
             DeviceLocation canonical;
@@ -243,6 +520,14 @@ public final class Devices {
                     continue;
                 }
                 BlockPos actual = findKindNear(level, local, cached.kind(), 2, occupiedByOthers);
+                if (actual != null) {
+                    // 存储区里相邻地址属于别的物理结构，就近找回必须确认是同一条结构，
+                    // 否则一次"修复"就会把绑定指到别人家的方块上
+                    DeviceLocation owner = SubLevelBridge.locateLocal(level, actual);
+                    if (owner == null || !added.equals(owner.subLevelId())) {
+                        actual = null;
+                    }
+                }
                 if (actual == null) {
                     com.mcl.cbtc.CreateBetterComputer.LOGGER.debug(
                             "外设绑定：结构 {} 内没找到 {}（预期 {}）",
@@ -280,10 +565,20 @@ public final class Devices {
                         && uniqueId.equals(SubLevelBridge.locateLocal(level, loc.pos()).subLevelId());
             }
             if (!belongs) {
+                // 重新组装会换结构 UUID：用方块自己的身份确认它是不是在这个结构里
+                DeviceLocation owned = identityLocation(level, identityOf(e.getKey()));
+                belongs = owned != null && uniqueId.equals(owned.subLevelId());
+            }
+            if (!belongs) {
                 continue;
             }
-            list.add(new PendingRemoval(e.getKey(), SubLevelBridge.toWorld(subLevel, loc.pos()),
-                    cached.kind(), now));
+            // 优先用"上次解析到的世界坐标"：拆卸事件触发时结构姿态可能还没更新，
+            // 姿态换算会偏几格，而方块实际就在它最后待过的那个位置附近。
+            Vec3 known = LAST_WORLD.get(e.getKey());
+            BlockPos expected = known != null
+                    ? BlockPos.containing(known)
+                    : SubLevelBridge.toWorld(subLevel, loc.pos());
+            list.add(new PendingRemoval(e.getKey(), expected, cached.kind(), now));
         }
         return list;
     }
@@ -299,17 +594,48 @@ public final class Devices {
         java.util.Set<BlockPos> claimed = new java.util.HashSet<>();
         for (PendingRemoval removal : removals) {
             long waited = now - removal.capturedAt();
-            // 大结构放回方块要好几秒，等一会儿再放弃；越等越放宽查找半径
-            int radius = waited < 20 ? 2 : 4;
+            // 方块自己知道它是谁：身份索引里记的就是它拆卸后待的位置，不需要按类型猜
+            java.util.UUID identity = identityOf(removal.deviceId());
+            if (identity != null) {
+                DeviceLocation owned = identityLocation(level, identity);
+                if (owned != null && !looksLikeSubLevelCoords(level, owned.pos())) {
+                    if (!owned.pos().equals(removal.worldPos())) {
+                        com.mcl.cbtc.CreateBetterComputer.LOGGER.debug(
+                                "外设绑定：{} 按身份定位到拆卸后位置 {}", removal.deviceId(), owned.pos());
+                    }
+                    claimed.add(owned.pos());
+                    LAST_WORLD.put(removal.deviceId(), Vec3.atCenterOf(owned.pos()));
+                    Cached old = CURRENT_LOCATIONS.get(removal.deviceId());
+                    CURRENT_LOCATIONS.put(removal.deviceId(), new Cached(new DeviceLocation(null, owned.pos()),
+                            removal.kind() != null ? removal.kind() : (old == null ? null : old.kind()),
+                            level.dimension().location()));
+                    continue;
+                }
+                if (waited < 200) {
+                    // 方块还没被放回主世界，继续等它出现
+                    unresolved.add(removal);
+                    continue;
+                }
+            }
+            // 方块放回主世界要几秒，且可能整块挪开一段（飞行器落地位置和记录点有差距），
+            // 所以边等边扩大搜索半径，而不是等不到就放弃。
+            int radius = waited < 20 ? 2 : waited < 60 ? 4 : waited < 140 ? 8 : 16;
             BlockPos actual = findKindNear(level, removal.worldPos(), removal.kind(), radius, claimed);
             if (actual == null) {
-                if (waited < 100) {
+                if (waited < 200) {
                     unresolved.add(removal);
-                } else {
-                    com.mcl.cbtc.CreateBetterComputer.LOGGER.warn(
-                            "外设绑定：{} 拆卸后没在主世界找到对应方块（预期 {}），保留原定位",
-                            removal.deviceId(), removal.worldPos());
+                    continue;
                 }
+                // 已经等够还没找到：至少把绑定改写成主世界坐标。
+                // 继续保留结构存储区坐标会让后续每次读取都解析失败，
+                // 连线方位角算出 NaN，齿轮箱就停在那里不动了。
+                claimed.add(removal.worldPos());
+                Cached stale = CURRENT_LOCATIONS.get(removal.deviceId());
+                CURRENT_LOCATIONS.put(removal.deviceId(), new Cached(new DeviceLocation(null, removal.worldPos()),
+                        stale == null ? null : stale.kind(), stale == null ? null : stale.dimension()));
+                com.mcl.cbtc.CreateBetterComputer.LOGGER.warn(
+                        "外设绑定：{} 拆卸后没在主世界找到对应方块（预期 {}），先按该坐标记录，读取时再就近找回",
+                        removal.deviceId(), removal.worldPos());
                 continue;
             }
             if (!actual.equals(removal.worldPos())) {
@@ -318,6 +644,7 @@ public final class Devices {
                         removal.worldPos(), actual);
             }
             claimed.add(actual);
+            LAST_WORLD.put(removal.deviceId(), Vec3.atCenterOf(actual));
             Cached old = CURRENT_LOCATIONS.get(removal.deviceId());
             CURRENT_LOCATIONS.put(removal.deviceId(), new Cached(new DeviceLocation(null, actual),
                     removal.kind() != null ? removal.kind() : (old == null ? null : old.kind()),
@@ -482,18 +809,19 @@ public final class Devices {
             Vec3 nav = DeviceAccess.navTableSelf(be);
             // 投影还没算好时导航台返回的是结构存储区坐标，这种值绝不能当世界坐标用
             if (nav != null && !looksLikeSubLevelCoords(level, BlockPos.containing(nav))) {
-                return nav;
+                return rememberWorld(deviceId, nav);
             }
         }
         Vec3 resolved = resolveWorldPos(level, normalizeLocation(level, loc), anchor);
         if (resolved != null) {
-            return resolved;
+            return rememberWorld(deviceId, resolved);
         }
         if (be == null) {
             return null;
         }
         // 方块还在结构存储区里时 getBlockPos() 是局部坐标，直接返回会把角度算歪
-        return looksLikeSubLevelCoords(level, be.getBlockPos()) ? null : Vec3.atCenterOf(be.getBlockPos());
+        return looksLikeSubLevelCoords(level, be.getBlockPos())
+                ? null : rememberWorld(deviceId, Vec3.atCenterOf(be.getBlockPos()));
     }
 
     /** 一条已解析的定位对应的主世界坐标；无法解析时返回 null。 */
@@ -553,6 +881,16 @@ public final class Devices {
         }
         return SubLevelBridge.inStorageBounds(level, pos)
                 || Math.abs((long) pos.getX()) > 1_000_000L || Math.abs((long) pos.getZ()) > 1_000_000L;
+    }
+
+    /**
+     * 该坐标是否位于结构存储区。
+     * <p>
+     * 存储区坐标绝不能在周围"按类型就近找回"：相邻地址属于别的物理结构，
+     * 找回来的可能是别人的方块，一次找回就把两条绑定绑到同一块上。
+     */
+    public static boolean isStoragePos(Level level, BlockPos pos) {
+        return looksLikeSubLevelCoords(level, pos);
     }
 
     /**

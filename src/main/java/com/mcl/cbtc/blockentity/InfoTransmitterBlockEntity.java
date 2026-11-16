@@ -1,5 +1,7 @@
 package com.mcl.cbtc.blockentity;
 
+import com.mcl.cbtc.device.DeviceIdentity;
+import com.mcl.cbtc.device.Devices;
 import com.mcl.cbtc.registry.CbcBlockEntities;
 import com.simibubi.create.content.redstone.displayLink.DisplayLinkContext;
 import java.util.LinkedHashMap;
@@ -12,6 +14,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 信息转发器的方块实体：按"行"接收显示链接器送来的内容。
@@ -21,7 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * 积木就能按"第 N 行"读取。一个链接重新发送时会先清掉自己上次写的那些行，
  * 避免数据源从多行变成单行后残留旧内容。
  */
-public class InfoTransmitterBlockEntity extends BlockEntity {
+public class InfoTransmitterBlockEntity extends BlockEntity implements DeviceIdentity {
     /** 可写入的行数，与 {@code InfoTransmitterDisplayTarget#provideStats} 保持一致。 */
     public static final int MAX_ROWS = 16;
     private static final String TAG_ROWS = "Rows";
@@ -31,9 +34,36 @@ public class InfoTransmitterBlockEntity extends BlockEntity {
     private final String[] rows = new String[MAX_ROWS];
     /** 每个显示链接上一次写入的起始行与行数（链接坐标 asLong）。 */
     private final Map<Long, Written> written = new LinkedHashMap<>();
+    /** 方块外设的持久身份：绑定靠它指到这台方块，结构搬动也不丢。 */
+    @Nullable
+    private java.util.UUID deviceId;
 
     public InfoTransmitterBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.INFO_TRANSMITTER.get(), pos, state);
+    }
+
+    @Nullable
+    @Override
+    public java.util.UUID deviceId() {
+        return deviceId;
+    }
+
+    @Override
+    public void setDeviceId(@Nullable java.util.UUID id) {
+        deviceId = id;
+        setChanged();
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        Devices.registerIdentity(level, this);
+    }
+
+    @Override
+    public void setRemoved() {
+        Devices.forgetIdentity(level, this);
+        super.setRemoved();
     }
 
     /** 显示链接把数据送进来时调用：从 {@code line} 行（0 起）开始依次写入。 */
@@ -92,6 +122,7 @@ public class InfoTransmitterBlockEntity extends BlockEntity {
             linkList.add(item);
         }
         tag.put(TAG_LINKS, linkList);
+        DeviceIdentity.writeId(tag, deviceId);
     }
 
     @Override
@@ -109,5 +140,6 @@ public class InfoTransmitterBlockEntity extends BlockEntity {
             CompoundTag item = linkList.getCompound(i);
             written.put(item.getLong("Pos"), new Written(item.getInt("Start"), item.getInt("Count")));
         }
+        deviceId = DeviceIdentity.readId(tag);
     }
 }

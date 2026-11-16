@@ -1,5 +1,41 @@
 # 更新日志
 
+## 1.1.2.1-beta
+
+> 测试版（Beta）：建议先在备份存档中验证后再用于正式存档。
+> 改进：外设绑定改为识别方块自身的持久身份，物理结构组装 / 拆卸 / 移动后不必重新绑定。
+
+### 改进
+
+- **外设绑定改为方块身份 UUID**：CB编程齿轮箱、智能转速控制器、CB音响、讲解石、CB打字机、信息转发器、结构图解传感器会把自己的持久 UUID 存进方块实体，外设绑定模块卡记的是这个身份而不是坐标。物理结构组装、拆卸、被推着飞走再落地后，绑定始终指向同一台方块；随方块物品拆下再放回也会保留身份
+- **丢失的绑定自行修复**：身份索引命中时直接把绑定校正到方块此刻的位置；只有命中失败才回落到坐标去找，找到后先核对候选方块的身份，避免「就近找回」把绑定指到旁边另一台同型号外设上
+
+### 兼容性
+
+- 旧存档的绑定无需重绑：第一次读取时会把方块自己的 UUID 自动补写进绑定记录
+- 其它模组的外设（导航台、哨戒动力臂、CBC 智能炮座、应力 / 转速表、雷达网络控制器）没有地方保存 UUID，仍按坐标定位
+- 不涉及存档结构变动，可直接覆盖升级
+
+---
+
+## 1.1.2.1-beta (English)
+
+> Beta release: please validate in a backed-up world before using it on a main save.
+> Improvement: peripheral bindings are now keyed by each block's persistent identity, so nothing needs to be rebound after a physics structure is assembled, disassembled or moved.
+
+### Improvements
+
+- **Peripheral bindings keyed by block UUID**: the CB gearbox, smart speed controller, CB speaker, lecture stone, CB typewriter, info transmitter and diagram sensor now persist their own UUID inside the block entity, and the peripheral card stores that identity instead of a coordinate. Bindings keep pointing at the same block through physics-structure assembly, disassembly, and being carried away and landed; picking a device up as an item and placing it back preserves its identity as well
+- **Lost bindings heal themselves**: when the identity index hits, the binding is corrected to the block's current position directly; only when that fails does it fall back to coordinates, and any candidate found that way is checked against the recorded identity first, so a "repair" can no longer silently latch onto an identical device placed next door
+
+### Compatibility
+
+- Existing bindings need no rebinding: the block's own UUID is written into the record automatically on its first read
+- Peripherals from other mods (nav tables, sentry arms, CBC smart mounts, stress / speed gauges, radar network controllers) have nowhere to store a UUID and stay coordinate-based
+- No save-format changes; drop-in upgrade
+
+---
+
 ## 1.1.2
 
 > 修复：导航台/准星连线角的方位角算错、齿轮箱跟随越转越偏、偶尔卡住不转；「旋转至」跟随更跟手。
