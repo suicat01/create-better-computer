@@ -1369,6 +1369,84 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     }
 
     /**
+     * 瞄准组件佩戴者的朝向角。
+     * <p>
+     * 水平取视线方位角，与 MC 原版朝向一致：正南为 0°、向西为正、正北为 ±180°、正东为 -90°；
+     * 上下取俯仰角（抬头为正，-90°~90°）；两者都是度数，可以直接喂给齿轮箱的「旋转至」/「定角」。
+     * 没有佩戴者时返回 NaN，这样下游的「旋转至」会忽略这次指令，炮塔不会突然转回 0°。
+     */
+    @Override
+    public double sightAngle(String sightDeviceId, String axis) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return Double.NaN;
+        }
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = boundDevices().get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return Double.NaN;
+        }
+        net.minecraft.server.level.ServerPlayer wearer = findSightWearer(serverLevel, sight.id());
+        if (wearer == null) {
+            return Double.NaN;
+        }
+        if ("vertical".equalsIgnoreCase(axis == null ? "" : axis.trim())) {
+            // 原版俯仰角是低头为正，这里翻成抬头为正
+            return -wearer.getXRot();
+        }
+        net.minecraft.world.phys.Vec3 look = wearer.getViewVector(1.0F);
+        // 与 MC 原版朝向同一套：正南 0°，向西为正（玩家朝西时 yaw 90）
+        return Math.toDegrees(Math.atan2(-look.x, look.z));
+    }
+
+    /**
+     * 准星相对"前→后"连线的偏差角：只需要两个外设的坐标，不需要导航台与目标。
+     * 0° = 准星与连线同向；没有佩戴者、缺外设或两点重合时返回 NaN。
+     */
+    @Override
+    public double sightLineBearing(String sightDeviceId, String deviceA, String deviceB) {
+        net.minecraft.server.level.ServerPlayer wearer = cbtc$sightLineWearer(sightDeviceId);
+        if (wearer == null) {
+            return Double.NaN;
+        }
+        return com.mcl.cbtc.device.Devices.directionBearing(wearer.serverLevel(),
+                wearer.getViewVector(1.0F), deviceA, cbtc$deviceLocation(deviceA),
+                deviceB, cbtc$deviceLocation(deviceB));
+    }
+
+    /** 把准星连线角换算成指定齿轮箱的绝对目标角，可以直接接「旋转至」。 */
+    @Override
+    public double sightLineAbsoluteTarget(String sightDeviceId, String deviceA, String deviceB,
+                                          String gearboxDevice) {
+        net.minecraft.server.level.ServerPlayer wearer = cbtc$sightLineWearer(sightDeviceId);
+        if (wearer == null) {
+            return Double.NaN;
+        }
+        return com.mcl.cbtc.device.Devices.directionAbsoluteTarget(wearer.serverLevel(),
+                wearer.getViewVector(1.0F), deviceA, cbtc$deviceLocation(deviceA),
+                deviceB, cbtc$deviceLocation(deviceB), gearboxDevice, cbtc$deviceLocation(gearboxDevice));
+    }
+
+    /** 瞄准组件的佩戴者；组件没选、类型不对或没人戴时返回 null。 */
+    @Nullable
+    private net.minecraft.server.level.ServerPlayer cbtc$sightLineWearer(String sightDeviceId) {
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = boundDevices().get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return null;
+        }
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+        return findSightWearer(serverLevel, sight.id());
+    }
+
+    /** 绑定记录里的定位；没绑定或没坐标时返回 null。 */
+    @Nullable
+    private com.mcl.cbtc.device.Devices.DeviceLocation cbtc$deviceLocation(String deviceId) {
+        com.mcl.cbtc.item.DeviceModuleItem.Device device = boundDevices().get(deviceId);
+        return device == null ? null
+                : new com.mcl.cbtc.device.Devices.DeviceLocation(device.subLevelId(), device.pos());
+    }
+
+    /**
      * 火控单位瞄准并击杀瞄准组件锁定的全部目标。
      * <p>
      * 启动后由 {@link #tickKillJob} 每刻接管瞄准与开火，直到锁定表清空；

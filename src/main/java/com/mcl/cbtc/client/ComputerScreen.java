@@ -1099,6 +1099,31 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
+        if ("sight_angle".equals(type.id())) {
+            // [瞄准组件] 佩戴者的 [水平/上下] 朝向
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sight_angle_mid"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("axis"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sight_angle_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sight_line_angle".equals(type.id())) {
+            // [瞄准组件] 的准星在 前[A] 后[B] 的 [前/后] 方位角，用 [齿轮箱] 换算成绝对角
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_sight_line_head"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_front"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device_a"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_back"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device_b"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_of"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("direction"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.blk_bearing_convert"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device_gearbox"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.blk_convert_abs"));
+            finishHeader(n, layout, depth);
+            return;
+        }
         int operator = operatorIndex(n);
         int keyIndex = 0;
         for (NodeType.Port port : type.inputs()) {
@@ -1216,7 +1241,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         cursor = addText(layout.headerItems, cursor,
                 Component.translatable("cbtc.gui.gearbox_at").getString());
         cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("device"));
-        String mode = n.param("mode");
+        String mode = gearboxModeKey(n.param("mode"));
         cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("direction"));
         cursor = addText(layout.headerItems, cursor,
                 Component.translatable("cbtc.gui.gearbox_speed").getString());
@@ -1225,11 +1250,11 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         cursor = addText(layout.headerItems, cursor,
                 Component.translatable("cbtc.gui.gearbox_rpm").getString());
         cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("mode"));
-        if (mode.startsWith(tr("cbtc.gui.mode_angle"))) {
+        if ("angle".equals(mode)) {
             cursor = addText(layout.headerItems, cursor,
                     Component.translatable("cbtc.gui.gearbox_degrees").getString());
             addSlot(n, layout.headerItems, cursor, "value", 2);
-        } else if (mode.startsWith(tr("cbtc.gui.mode_rotate_to"))) {
+        } else if ("rotate_to".equals(mode)) {
             // 面向 N 度：数值胶囊在中间、单位跟在后面，与表盘拾取器的写法一致
             cursor = addText(layout.headerItems, cursor,
                     Component.translatable("cbtc.gui.gearbox_facing").getString());
@@ -1237,6 +1262,24 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             addText(layout.headerItems, cursor,
                     Component.translatable("cbtc.gui.gearbox_degrees").getString());
         }
+    }
+
+    /**
+     * 齿轮箱模式参数归一化：新存档存英文键（continuous / angle / jog / rotate_to），
+     * 旧存档存的是界面文字，两边都要认，否则换了模式就会丢槽位、显示成英文键。
+     */
+    private static String gearboxModeKey(String stored) {
+        String text = stored == null ? "" : stored.trim();
+        if (text.startsWith(tr("cbtc.gui.mode_rotate_to")) || text.startsWith("rotate_to")) {
+            return "rotate_to";
+        }
+        if (text.startsWith(tr("cbtc.gui.mode_angle")) || text.startsWith("angle")) {
+            return "angle";
+        }
+        if (text.startsWith(tr("cbtc.gui.mode_jog")) || text.startsWith("jog")) {
+            return "jog";
+        }
+        return "continuous";
     }
 
     /** 局域网积木：标出"在哪个局域网、哪个频道 / 变量名"，参数胶囊点开是下拉选择。 */
@@ -1775,9 +1818,30 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "device_gearbox".equals(t.params().get(index))) {
             return deviceNameOf(stored);
         }
+        // 齿轮箱模式存英文键，界面上显示中文
+        if ("mode".equals(t.params().get(index)) && "gearbox_control".equals(n.typeId())) {
+            return switch (gearboxModeKey(stored)) {
+                case "angle" -> tr("cbtc.gui.mode_angle");
+                case "jog" -> tr("cbtc.gui.mode_jog");
+                case "rotate_to" -> tr("cbtc.gui.mode_rotate_to");
+                default -> tr("cbtc.gui.mode_continuous");
+            };
+        }
         // 火控击杀的排序方式存英文键，界面上显示中文
         if ("order".equals(t.params().get(index)) && "fire_control_kill_all".equals(n.typeId())) {
             return lockOrderLabel(stored);
+        }
+        // 朝向积木的水平/上下同样存英文键
+        if ("axis".equals(t.params().get(index)) && "sight_angle".equals(n.typeId())) {
+            return "vertical".equals(stored) ? tr("cbtc.gui.angle_axis_v") : tr("cbtc.gui.angle_axis_h");
+        }
+        // 前/后方向：新存档存 front/back，旧存档存本地化文字，统一显示成当前语言
+        if ("direction".equals(t.params().get(index))
+                && ("sight_line_angle".equals(n.typeId()) || "nav_line_direction".equals(n.typeId())
+                || "nav_line_range".equals(n.typeId()) || "nav_line_angle".equals(n.typeId()))) {
+            String text = stored.trim();
+            boolean back = "back".equals(text) || text.equals(tr("cbtc.gui.side_back"));
+            return back ? tr("cbtc.gui.side_back") : tr("cbtc.gui.side_front");
         }
         // 局域网参数只认单个网，没选时提示去选
         if ("network".equals(t.params().get(index))) {
@@ -1872,7 +1936,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             return false;
         }
         if ("gearbox_control".equals(t.id())) {
-            return "value".equals(portKey) && n.param("mode").startsWith(tr("cbtc.gui.mode_rotate_to"));
+            return "value".equals(portKey) && "rotate_to".equals(gearboxModeKey(n.param("mode")));
         }
         for (NodeType.Port port : t.inputs()) {
             if (port.key().equals(portKey)) {
@@ -2143,7 +2207,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "sentry_reload".equals(type.id())
                 || "sentry_ammo".equals(type.id()) || "sentry_magazine".equals(type.id())
                 || "sight_lock_clear_all".equals(type.id()) || "sight_lock_clear_last".equals(type.id())
-                || "fire_control_kill_all".equals(type.id());
+                || "fire_control_kill_all".equals(type.id()) || "sight_angle".equals(type.id())
+                || "sight_line_angle".equals(type.id());
     }
 
     /** 目标定位模块相关积木：只能选已绑定的定位模块。 */
@@ -3765,7 +3830,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if ("gearbox_control".equals(typeId) && "direction".equals(key)) {
             // 最短路径只对"旋转至"有意义：其余模式必须指定绕行方向
-            if (node != null && node.param("mode").trim().startsWith(tr("cbtc.gui.mode_rotate_to"))) {
+            if (node != null && "rotate_to".equals(gearboxModeKey(node.param("mode")))) {
                 return new String[]{tr("cbtc.gui.dir_forward"), tr("cbtc.gui.dir_reverse"),
                         tr("cbtc.gui.dir_shortest")};
             }
@@ -3791,11 +3856,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 && "axis".equals(key)) {
             return new String[]{"X", "Z"};
         }
+        if ("sight_angle".equals(typeId) && "axis".equals(key)) {
+            return new String[]{tr("cbtc.gui.angle_axis_h"), tr("cbtc.gui.angle_axis_v")};
+        }
         if ("nav_bearing_direction".equals(typeId) && "direction".equals(key)) {
             return compassChoices();
         }
         if (("nav_line_direction".equals(typeId) || "nav_line_range".equals(typeId)
-                || "nav_line_angle".equals(typeId)) && "direction".equals(key)) {
+                || "nav_line_angle".equals(typeId) || "sight_line_angle".equals(typeId))
+                && "direction".equals(key)) {
             return new String[]{tr("cbtc.gui.side_front"), tr("cbtc.gui.side_back")};
         }
         if ("nav_line_direction".equals(typeId) && "bearing".equals(key)) {
@@ -3896,6 +3965,12 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if (display.equals(tr("cbtc.gui.dir_shortest"))) {
             return "shortest";
+        }
+        if (display.equals(tr("cbtc.gui.angle_axis_h"))) {
+            return "horizontal";
+        }
+        if (display.equals(tr("cbtc.gui.angle_axis_v"))) {
+            return "vertical";
         }
         if (display.equals(tr("cbtc.gui.side_front"))) {
             return "front";
@@ -4274,6 +4349,14 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             }
             return names.toArray(String[]::new);
         }
+        if ("line_anchor".equals(menuKind(node, index))) {
+            // 准星连线角只是拿两块外设的位置定一条轴，任何已绑定外设都能当定位点（含导航台）
+            java.util.List<String> names = new java.util.ArrayList<>();
+            for (var device : peripheralDevices) {
+                names.add(device.name() + "(" + kindDisplay(device.kind()) + ")");
+            }
+            return names.toArray(String[]::new);
+        }
         if ("nav_line_b".equals(menuKind(node, index))) {
             // 辅助定位点：A 已经是导航台，B 不能再选导航台，否则两点重合、方位角恒为 0
             java.util.List<String> names = new java.util.ArrayList<>();
@@ -4468,6 +4551,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             }
             return candidates.get(optionIndex).id();
         }
+        if ("line_anchor".equals(menuKind(node, index))) {
+            // 与 deviceMenuOptions 的 line_anchor 分支保持一致，下标才能对上
+            return optionIndex < peripheralDevices.size() ? peripheralDevices.get(optionIndex).id() : "";
+        }
         if ("nav_line_b".equals(menuKind(node, index))) {
             // 与 deviceMenuOptions 的 navLineBCandidates() 保持一致，下标才能对上
             java.util.List<com.mcl.cbtc.network.DeviceListPayload.Entry> candidates = navLineBCandidates();
@@ -4489,10 +4576,12 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             return "gearbox_device";
         }
         if ("device_a".equals(key)) {
-            return "nav_table_device";
+            // 准星连线角没有导航台，前/后两个口都是纯定位点，已绑定外设均可选
+            return "sight_line_angle".equals(node.typeId()) ? "line_anchor" : "nav_table_device";
         }
         if ("device_b".equals(key)) {
-            return "nav_line_b";
+            // 导航台连线角的后点不能是导航台本身，否则两点重合、方位角恒为 0
+            return "sight_line_angle".equals(node.typeId()) ? "line_anchor" : "nav_line_b";
         }
         if ("network".equals(key)) {
             return "lan_network";
@@ -4693,6 +4782,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         // 导航台 / 辅助定位外设：下拉选已绑定的设备
         if ("nav_table_device".equals(menuKind(n, index)) || "nav_line_b".equals(menuKind(n, index))
+                || "line_anchor".equals(menuKind(n, index))
                 || "gearbox_device".equals(menuKind(n, index))) {
             commitParamEdit();
             deviceMenuNode = n;
@@ -4816,7 +4906,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
     /** 只有"旋转至"的角度参数走表盘：其它模式的数值含义不是朝向。 */
     private static boolean isAngleDialParam(Node n, String key) {
         return "gearbox_control".equals(n.typeId()) && "value".equals(key)
-                && n.param("mode").startsWith(tr("cbtc.gui.mode_rotate_to"));
+                && "rotate_to".equals(gearboxModeKey(n.param("mode")));
     }
 
     private void openAngleDial(Node n, int index) {
@@ -5039,12 +5129,17 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             int[] r = opMenuRects.get(i);
             if (mx >= r[0] && mx < r[0] + r[2] && my >= r[1] && my < r[1] + r[3]) {
                 opMenuNode.setParam(opMenuIndex, opSymbol(choices[i]));
-                // 模式从"旋转至"改走后，"最短路径"就不再适用，回落到正转
+                // 模式从"旋转至"改走后，"最短路径"就不再适用，回落到正转；
+                // 反过来切到"旋转至"时默认用最短路径，否则绝对角度会绕着长边转一大圈
                 if ("gearbox_control".equals(opMenuNode.typeId())
                         && "mode".equals(opMenuNode.type().params().get(opMenuIndex))) {
-                    String dir = opMenuNode.param("direction");
-                    if (dir.equals("shortest") || dir.startsWith(tr("cbtc.gui.dir_shortest"))) {
-                        opMenuNode.setParam("direction", "forward");
+                    if ("rotate_to".equals(gearboxModeKey(opMenuNode.param("mode")))) {
+                        opMenuNode.setParam("direction", "shortest");
+                    } else {
+                        String dir = opMenuNode.param("direction");
+                        if (dir.equals("shortest") || dir.startsWith(tr("cbtc.gui.dir_shortest"))) {
+                            opMenuNode.setParam("direction", "forward");
+                        }
                     }
                 }
                 closeOpMenu();

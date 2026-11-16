@@ -370,6 +370,8 @@ public class DeviceModuleItem extends UpgradeModuleItem {
         List<Device> result = new ArrayList<>();
         boolean server = level != null && !level.isClientSide;
         boolean changed = false;
+        // 同一维度里已经分配出去的方块位置：保证一台方块外设只对应一条绑定
+        java.util.Map<ResourceLocation, java.util.Set<BlockPos>> claimed = new java.util.HashMap<>();
         for (int i = 0; i < entries.size(); i++) {
             CompoundTag entry = entries.getCompound(i);
             String id = entry.getString("Id");
@@ -409,11 +411,14 @@ public class DeviceModuleItem extends UpgradeModuleItem {
             if (server && recordLevel != null) {
                 com.mcl.cbtc.device.Devices.DeviceLocation cached =
                         com.mcl.cbtc.device.Devices.currentLocation(recordLevel, id);
+                java.util.Set<BlockPos> taken = claimed.computeIfAbsent(dim,
+                        key -> new java.util.HashSet<>());
                 com.mcl.cbtc.device.Devices.DeviceLocation resolved = resolveBinding(
-                        recordLevel, kind, cached != null ? cached : canonical, worldFallback);
+                        recordLevel, kind, cached != null ? cached : canonical, worldFallback, taken);
                 if (resolved != null) {
                     canonical = resolved;
                 }
+                taken.add(canonical.pos());
                 com.mcl.cbtc.device.Devices.registerLocation(recordLevel, id, canonical, kind);
                 Vec3 currentWorld = com.mcl.cbtc.device.Devices.worldPos(recordLevel, canonical);
                 BlockPos world = currentWorld == null ? worldFallback : BlockPos.containing(currentWorld);
@@ -460,34 +465,48 @@ public class DeviceModuleItem extends UpgradeModuleItem {
 
     /**
      * 把一条记录解析成当前有效的定位；找不到时返回最接近的猜测（绝不返回 null 销毁信息）。
+     * <p>
+     * {@code claimed} 是本卡里已经被别的记录占用的方块位置：按坐标就近找回同类外设时必须跳过，
+     * 否则挨着放的同类外设会一起塌到同一块上，两条绑定重合后连线角度只能算出 NaN。
      */
     @Nullable
     private static com.mcl.cbtc.device.Devices.DeviceLocation resolveBinding(Level level, DeviceKind kind,
-            @Nullable com.mcl.cbtc.device.Devices.DeviceLocation base, @Nullable BlockPos worldFallback) {
+            @Nullable com.mcl.cbtc.device.Devices.DeviceLocation base, @Nullable BlockPos worldFallback,
+            java.util.Set<BlockPos> claimed) {
         com.mcl.cbtc.device.Devices.DeviceLocation normalized =
                 com.mcl.cbtc.device.Devices.normalizeLocation(level, base);
-        if (validDevice(level, normalized, kind)) {
+        if (validDevice(level, normalized, kind) && !claimed.contains(normalized.pos())) {
             return normalized;
         }
         if (worldFallback != null) {
             com.mcl.cbtc.device.Devices.DeviceLocation fromWorld =
                     com.mcl.cbtc.device.Devices.normalizeLocation(
                             level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, worldFallback));
-            if (validDevice(level, fromWorld, kind)) {
+            if (validDevice(level, fromWorld, kind) && !claimed.contains(fromWorld.pos())) {
                 return fromWorld;
             }
-            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, worldFallback, kind, 2);
+            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, worldFallback, kind, 2, claimed);
             if (near != null) {
                 return com.mcl.cbtc.device.Devices.normalizeLocation(
                         level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, near));
             }
         }
         if (normalized != null) {
-            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, normalized.pos(), kind, 2);
+            BlockPos pos = normalized.pos();
+            BlockPos near = com.mcl.cbtc.device.Devices.findKindNear(level, pos, kind, 2, claimed);
+            if (near == null && claimed.contains(pos)) {
+                // 记录本身已经和别的绑定重合：在稍大范围里再找一台没被占用的同类外设
+                near = com.mcl.cbtc.device.Devices.findKindNear(level, pos, kind, 4, claimed);
+            }
             if (near != null) {
                 return com.mcl.cbtc.device.Devices.normalizeLocation(
                         level, new com.mcl.cbtc.device.Devices.DeviceLocation(null, near));
             }
+        }
+        if (normalized != null && claimed.contains(normalized.pos())) {
+            com.mcl.cbtc.CreateBetterComputer.LOGGER.debug(
+                    "外设绑定：{} 与其它绑定的坐标重合（{}），附近没找到可用的同类外设",
+                    kind.id(), normalized.pos());
         }
         return normalized;
     }

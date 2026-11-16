@@ -63,6 +63,10 @@ public final class Devices {
     private static final java.util.Map<String, Cached> CURRENT_LOCATIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 连线求角失败告警的节流表：key → 上次输出时的游戏刻。 */
+    private static final java.util.Map<String, Long> BEARING_DIAG_COOLDOWN =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 定位主世界坐标：如果传入的坐标其实已经在结构存储区里（旧存档或穿透交互会这样），
      * 直接按存储区归属成"结构 UUID + 结构内坐标"，绝不能把它当世界坐标记下来。
@@ -195,12 +199,21 @@ public final class Devices {
      */
     static void onSubLevelAssembled(Level level, dev.ryanhcode.sable.sublevel.SubLevel subLevel) {
         java.util.UUID added = subLevel.getUniqueId();
+        // 结构里已有一批外设，换算时不能把两台外设指到同一块上
+        java.util.Set<BlockPos> used = new java.util.HashSet<>();
+        for (Cached cached : CURRENT_LOCATIONS.values()) {
+            if (cached.location() != null) {
+                used.add(cached.location().pos());
+            }
+        }
         for (var e : CURRENT_LOCATIONS.entrySet()) {
             Cached cached = e.getValue();
             if (cached.location() == null) {
                 continue;
             }
             DeviceLocation loc = cached.location();
+            java.util.Set<BlockPos> occupiedByOthers = new java.util.HashSet<>(used);
+            occupiedByOthers.remove(loc.pos());
             DeviceLocation canonical;
             if (SubLevelBridge.inStorageBounds(level, loc.pos())) {
                 canonical = SubLevelBridge.locateLocal(level, loc.pos());
@@ -211,6 +224,9 @@ public final class Devices {
                     continue;
                 }
                 if (level.getBlockEntity(canonical.pos()) == null) {
+                    continue;
+                }
+                if (occupiedByOthers.contains(canonical.pos())) {
                     continue;
                 }
             } else {
@@ -226,7 +242,7 @@ public final class Devices {
                 if (!SubLevelBridge.inStorageBounds(level, local)) {
                     continue;
                 }
-                BlockPos actual = findKindNear(level, local, cached.kind(), 2);
+                BlockPos actual = findKindNear(level, local, cached.kind(), 2, occupiedByOthers);
                 if (actual == null) {
                     com.mcl.cbtc.CreateBetterComputer.LOGGER.debug(
                             "外设绑定：结构 {} 内没找到 {}（预期 {}）",
@@ -235,6 +251,7 @@ public final class Devices {
                 }
                 canonical = new DeviceLocation(added, actual);
             }
+            used.add(canonical.pos());
             DeviceKind found = DeviceReaders.kindOf(level.getBlockEntity(canonical.pos()));
             e.setValue(new Cached(canonical, found != null ? found : cached.kind(), cached.dimension()));
             com.mcl.cbtc.CreateBetterComputer.LOGGER.debug("外设绑定：{} 结构内定位刷新为 {}",
@@ -278,10 +295,15 @@ public final class Devices {
     static List<PendingRemoval> applyRemovals(Level level, List<PendingRemoval> removals) {
         List<PendingRemoval> unresolved = new ArrayList<>();
         long now = level.getGameTime();
+        // 同一批拆卸里先找到的外设占住方块，后面的记录不会重复落到同一块上
+        java.util.Set<BlockPos> claimed = new java.util.HashSet<>();
         for (PendingRemoval removal : removals) {
-            BlockPos actual = findKindNear(level, removal.worldPos(), removal.kind(), 2);
+            long waited = now - removal.capturedAt();
+            // 大结构放回方块要好几秒，等一会儿再放弃；越等越放宽查找半径
+            int radius = waited < 20 ? 2 : 4;
+            BlockPos actual = findKindNear(level, removal.worldPos(), removal.kind(), radius, claimed);
             if (actual == null) {
-                if (now - removal.capturedAt() < 20) {
+                if (waited < 100) {
                     unresolved.add(removal);
                 } else {
                     com.mcl.cbtc.CreateBetterComputer.LOGGER.warn(
@@ -295,6 +317,7 @@ public final class Devices {
                         "外设绑定：{} 拆卸位置从 {} 修正到 {}", removal.deviceId(),
                         removal.worldPos(), actual);
             }
+            claimed.add(actual);
             Cached old = CURRENT_LOCATIONS.get(removal.deviceId());
             CURRENT_LOCATIONS.put(removal.deviceId(), new Cached(new DeviceLocation(null, actual),
                     removal.kind() != null ? removal.kind() : (old == null ? null : old.kind()),
@@ -309,12 +332,27 @@ public final class Devices {
      */
     @Nullable
     public static BlockPos findKindNear(Level level, BlockPos pos, DeviceKind kind, int radius) {
+        return findKindNear(level, pos, kind, radius, java.util.Set.of());
+    }
+
+    /**
+     * 同 {@link #findKindNear(Level, BlockPos, DeviceKind, int)}，但跳过已经被别的绑定占用的位置。
+     * <p>
+     * 贴近摆放的同类外设（例如两台挨着的 CB音响）在按坐标就近找回时会一起塌到同一块上，
+     * 两个绑定重合后，连线类的角度积木只能算出 NaN。这里用占用集合保证一台外设只归一条记录。
+     */
+    @Nullable
+    public static BlockPos findKindNear(Level level, BlockPos pos, DeviceKind kind, int radius,
+                                        java.util.Set<BlockPos> exclude) {
         BlockPos best = null;
         double bestDist = Double.MAX_VALUE;
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos candidate = pos.offset(dx, dy, dz);
+                    if (exclude.contains(candidate)) {
+                        continue;
+                    }
                     BlockEntity be = level.getBlockEntity(candidate);
                     if (be == null) {
                         continue;
@@ -442,7 +480,8 @@ public final class Devices {
         BlockEntity be = blockEntityAt(level, deviceId, fallback);
         if (be != null) {
             Vec3 nav = DeviceAccess.navTableSelf(be);
-            if (nav != null) {
+            // 投影还没算好时导航台返回的是结构存储区坐标，这种值绝不能当世界坐标用
+            if (nav != null && !looksLikeSubLevelCoords(level, BlockPos.containing(nav))) {
                 return nav;
             }
         }
@@ -450,7 +489,11 @@ public final class Devices {
         if (resolved != null) {
             return resolved;
         }
-        return be == null ? null : Vec3.atCenterOf(be.getBlockPos());
+        if (be == null) {
+            return null;
+        }
+        // 方块还在结构存储区里时 getBlockPos() 是局部坐标，直接返回会把角度算歪
+        return looksLikeSubLevelCoords(level, be.getBlockPos()) ? null : Vec3.atCenterOf(be.getBlockPos());
     }
 
     /** 一条已解析的定位对应的主世界坐标；无法解析时返回 null。 */
@@ -544,6 +587,37 @@ public final class Devices {
     private static final java.util.Map<String, Long> BASELINE_DIAG_TICKS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 实测结论：齿轮箱账面角增大时，平台在世界里的方位角是否同向增大。 */
+    private static final java.util.Map<String, Boolean> SPIN_FOLLOWS_BOOK =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 上一次采样：{账面角, 方位角}，用于实测账面角与平台转向的关系。 */
+    private static final java.util.Map<String, double[]> SPIN_LAST_SAMPLE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 实测齿轮箱账面角与平台方位角的关系。
+     * <p>
+     * 账面角增大时平台可能同向转，也可能因齿轮组反向装配而反向转。写死符号总有一半装置是反的，
+     * 反了就成了正反馈：每转一次偏差翻倍，平台绕着整圈乱打转、永远不收敛。
+     * 这里拿上一次采样的实际转动量判断方向；判断不出来时沿用上次结论，初始按同向处理。
+     */
+    private static boolean spinFollowsBook(String key, double book, double theta) {
+        boolean same = SPIN_FOLLOWS_BOOK.getOrDefault(key, Boolean.TRUE);
+        double[] last = SPIN_LAST_SAMPLE.get(key);
+        if (last != null) {
+            double db = com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(book - last[0]);
+            double dt = com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(theta - last[1]);
+            // 齿轮箱确实转过一段、平台也确实动过，才足以判断方向
+            if (Math.abs(db) > 15 && Math.abs(dt) > 5) {
+                same = db * dt > 0;
+                SPIN_FOLLOWS_BOOK.put(key, same);
+            }
+        }
+        SPIN_LAST_SAMPLE.put(key, new double[]{book, theta});
+        return same;
+    }
+
     /**
      * 基线方位角：以 A（前，导航台）的目标点为"目标"，结构正前方 = 由 B 指向 A，
      * 返回目标相对正前方的夹角。正对目标 = 0°，目标在左侧 = +90°，右侧 = -90°，范围 -180° ~ +180°。
@@ -562,9 +636,11 @@ public final class Devices {
                     + " cacheA=" + currentLocation(deviceA));
             return Double.NaN;
         }
-        Vec3 selfA = DeviceAccess.navTableSelf(beA);
+        // 走 projectedPos 而不是直取导航台自身坐标：后者在投影就绪前会返回存储区坐标
+        Vec3 selfA = projectedPos(level, deviceA, fallbackA);
         Vec3 targetA = DeviceAccess.navTableTarget(beA);
-        if (selfA == null || targetA == null) {
+        if (selfA == null || targetA == null
+                || looksLikeSubLevelCoords(level, BlockPos.containing(targetA))) {
             diagBearing(diag, diagKey, "A 不是导航台或没有目标 self=" + selfA + " target=" + targetA);
             return Double.NaN;
         }
@@ -616,17 +692,30 @@ public final class Devices {
     public static double baselineAbsoluteTarget(Level level, String deviceA, DeviceLocation fallbackA,
                                                 String deviceB, DeviceLocation fallbackB,
                                                 String gearboxDevice, DeviceLocation fallbackGearbox) {
+        String diagKey = "abs|" + (deviceA == null ? "" : deviceA) + "|" + (deviceB == null ? "" : deviceB);
+        long now = level.getGameTime();
+        boolean diag = now - BASELINE_DIAG_TICKS.getOrDefault(diagKey, -1000L) >= 100;
+        if (diag) {
+            BASELINE_DIAG_TICKS.put(diagKey, now);
+        }
         BlockEntity beA = blockEntityAt(level, deviceA, fallbackA);
         if (beA == null) {
+            diagBearing(diag, diagKey, "A 的方块实体没找到 fallbackA=" + fallbackA
+                    + " cacheA=" + currentLocation(deviceA));
             return Double.NaN;
         }
-        Vec3 selfA = DeviceAccess.navTableSelf(beA);
+        // 走 projectedPos 而不是直取导航台自身坐标：后者在投影就绪前会返回存储区坐标
+        Vec3 selfA = projectedPos(level, deviceA, fallbackA);
         Vec3 targetA = DeviceAccess.navTableTarget(beA);
-        if (selfA == null || targetA == null) {
+        if (selfA == null || targetA == null
+                || looksLikeSubLevelCoords(level, BlockPos.containing(targetA))) {
+            diagBearing(diag, diagKey, "A 不是导航台或没有目标 self=" + selfA + " target=" + targetA);
             return Double.NaN;
         }
         Vec3 selfB = projectedPos(level, deviceB, fallbackB, selfA);
         if (selfB == null) {
+            diagBearing(diag, diagKey, "B 坐标解析失败 fallbackB=" + fallbackB
+                    + " cacheB=" + currentLocation(deviceB));
             return Double.NaN;
         }
         double dx = selfA.x - selfB.x;
@@ -634,6 +723,7 @@ public final class Devices {
         double tx = targetA.x - selfB.x;
         double tz = targetA.z - selfB.z;
         if (dx * dx + dz * dz < 1e-12 || tx * tx + tz * tz < 1e-12) {
+            diagBearing(diag, diagKey, "两点重合 selfA=" + selfA + " targetA=" + targetA + " selfB=" + selfB);
             return Double.NaN;
         }
         double theta = Math.toDegrees(Math.atan2(dz, dx));
@@ -642,7 +732,107 @@ public final class Devices {
         BlockEntity beGear = blockEntityAt(level, gearboxDevice, fallbackGearbox);
         double current = beGear instanceof com.mcl.cbtc.blockentity.CBGearboxBlockEntity gearbox
                 ? gearbox.relativeAngle() : 0;
-        return com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(current + delta);
+        boolean sameSpin = spinFollowsBook(diagKey, current, theta);
+        double target = com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(
+                current + (sameSpin ? -delta : delta));
+        diagBearing(diag, diagKey, String.format(java.util.Locale.ROOT,
+                "selfA=%s targetA=%s selfB=%s theta=%.3f phi=%.3f delta=%.3f same=%s current=%.3f -> %.3f",
+                selfA, targetA, selfB, theta, phi, delta, sameSpin, current, target));
+        return target;
+    }
+
+    /**
+     * 某个方向相对 A→B 连线前方轴的偏差角：0° = 与连线同向，符号与「导航台连线」一致。
+     * <p>
+     * 只用到方向、不需要目标点，所以前后两个外设都只要坐标，不要求是导航台。
+     *
+     * @return 偏差角（-180~180）；外设缺失或两点重合成一条线时返回 NaN
+     */
+    public static double directionBearing(Level level, Vec3 direction,
+                                          String deviceA, DeviceLocation fallbackA,
+                                          String deviceB, DeviceLocation fallbackB) {
+        Vec3 selfA = projectedPos(level, deviceA, fallbackA);
+        if (selfA == null) {
+            debugBearingOnce(level, "a:" + deviceA, "连线方位角：" + deviceA + " 没有解析到坐标");
+            return Double.NaN;
+        }
+        Vec3 selfB = projectedPos(level, deviceB, fallbackB, selfA);
+        if (selfB == null) {
+            debugBearingOnce(level, "b:" + deviceB, "连线方位角：" + deviceB + " 没有解析到坐标");
+            return Double.NaN;
+        }
+        double fx = selfA.x - selfB.x;
+        double fz = selfA.z - selfB.z;
+        double fl = Math.sqrt(fx * fx + fz * fz);
+        double tl = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+        if (fl < 1E-6 || tl < 1E-6) {
+            debugBearingOnce(level, "same:" + deviceA + ":" + deviceB,
+                    "连线方位角：" + deviceA + " 与 " + deviceB + " 的坐标重合（" + selfA + "），无法确定连线方向");
+            return Double.NaN;
+        }
+        fx /= fl;
+        fz /= fl;
+        double tx = direction.x / tl;
+        double tz = direction.z / tl;
+        return Math.toDegrees(Math.atan2(tx * fz - tz * fx, tx * fx + tz * fz));
+    }
+
+    /** 对同一条告警做节流，避免积木每刻执行时刷屏。 */
+    private static void debugBearingOnce(Level level, String key, String message) {
+        long now = level.getGameTime();
+        Long last = BEARING_DIAG_COOLDOWN.get(key);
+        if (last != null && now - last < 100) {
+            return;
+        }
+        BEARING_DIAG_COOLDOWN.put(key, now);
+        com.mcl.cbtc.CreateBetterComputer.LOGGER.debug(message);
+    }
+
+    /**
+     * 把某个方向换算成指定齿轮箱的绝对目标角，与 {@link #baselineAbsoluteTarget} 同一套公式，
+     * 只是把"目标点相对 B 的方位"换成方向本身的方位。
+     *
+     * @return 相对齿轮箱零点的绝对角（-180~180）；取不到数据时返回 NaN
+     */
+    public static double directionAbsoluteTarget(Level level, Vec3 direction,
+                                                 String deviceA, DeviceLocation fallbackA,
+                                                 String deviceB, DeviceLocation fallbackB,
+                                                 String gearboxDevice, DeviceLocation fallbackGearbox) {
+        String diagKey = "dabs|" + (deviceA == null ? "" : deviceA) + "|" + (deviceB == null ? "" : deviceB);
+        long now = level.getGameTime();
+        boolean diag = now - BASELINE_DIAG_TICKS.getOrDefault(diagKey, -1000L) >= 100;
+        if (diag) {
+            BASELINE_DIAG_TICKS.put(diagKey, now);
+        }
+        Vec3 selfA = projectedPos(level, deviceA, fallbackA);
+        if (selfA == null) {
+            diagBearing(diag, diagKey, "A 坐标解析失败 fallbackA=" + fallbackA);
+            return Double.NaN;
+        }
+        Vec3 selfB = projectedPos(level, deviceB, fallbackB, selfA);
+        if (selfB == null) {
+            diagBearing(diag, diagKey, "B 坐标解析失败 fallbackB=" + fallbackB + " selfA=" + selfA);
+            return Double.NaN;
+        }
+        double dx = selfA.x - selfB.x;
+        double dz = selfA.z - selfB.z;
+        if (dx * dx + dz * dz < 1e-6 || direction.x * direction.x + direction.z * direction.z < 1e-12) {
+            diagBearing(diag, diagKey, "两点重合 selfA=" + selfA + " selfB=" + selfB);
+            return Double.NaN;
+        }
+        double theta = Math.toDegrees(Math.atan2(dz, dx));
+        double phi = Math.toDegrees(Math.atan2(direction.z, direction.x));
+        double delta = com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(theta - phi);
+        BlockEntity beGear = blockEntityAt(level, gearboxDevice, fallbackGearbox);
+        double current = beGear instanceof com.mcl.cbtc.blockentity.CBGearboxBlockEntity gearbox
+                ? gearbox.relativeAngle() : 0;
+        boolean sameSpin = spinFollowsBook(diagKey, current, theta);
+        double target = com.mcl.cbtc.blockentity.CBGearboxBlockEntity.wrapAngle(
+                current + (sameSpin ? -delta : delta));
+        diagBearing(diag, diagKey, String.format(java.util.Locale.ROOT,
+                "selfA=%s selfB=%s dir=(%.3f,%.3f) theta=%.3f phi=%.3f delta=%.3f same=%s current=%.3f -> %.3f",
+                selfA, selfB, direction.x, direction.z, theta, phi, delta, sameSpin, current, target));
+        return target;
     }
 
     /** 打印一条基线方位角诊断；enabled 为 false 时直接跳过。 */

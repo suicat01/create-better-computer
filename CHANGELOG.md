@@ -1,5 +1,53 @@
 # 更新日志
 
+## 1.1.2
+
+> 修复：导航台/准星连线角的方位角算错、齿轮箱跟随越转越偏、偶尔卡住不转；「旋转至」跟随更跟手。
+
+### 修复
+
+- **导航台连线角首值错误**：物理结构刚组装完、投影还没算好时，导航台返回的自身坐标是结构存储区坐标（上千万量级），被当成世界坐标参与计算，第一条指令直接算歪；现在这类值一律作废，改按结构内坐标投影到世界后再算
+- **齿轮箱越转越偏**：闭环此前假定「账面角增大 = 平台方位角增大」，遇到齿轮组反向装配的装置会变成正反馈，偏差每轮翻倍、平台绕着整圈乱转；现在用上一次的账面角变化与实际方位角变化实测判断同向/反向，换装置也不会反
+- **偶尔卡住不转**：输入轴转速为 0 时发起角度指令，原版按时长折算会除零溢出成负数，序列永远跑不完，之后所有指令都被「还没跑完」挡掉；现在轴不转时不发起指令，并加入 40 刻看门狗强制复位，已卡住的存档也能自行恢复
+- **外设绑定塌到同一坐标**：物理结构组装/拆卸后多台外设可能被就近找回成同一块方块；现在定位会排除已被占用的坐标，必要时扩大搜索半径
+- **无效角度驱动齿轮箱**：外设未加载或连线两点重合时算出的角度不再下发，齿轮箱不会追着无效值乱转
+
+### 改进
+
+- **「旋转至」改为连续跟随**：不再把一次转向切成一段一段（每段结束轴都要停一下再接下一段，动作会断成一节一节），改成轴持续转动、每刻只决定换不换向和何时停，动作连贯，同时能及时跟上准星与移动目标
+- **准星连线角的外设选择**：前、后两个槽都可选任意已绑定外设（含导航台、目标定位模块），不再被误排除
+- **方向参数显示**：统一存英文稳定值并本地化显示，旧存档里的「前/后」值继续可用
+
+### 说明
+
+- 不涉及存档结构变动，可直接覆盖升级；已卡住的齿轮箱无需拆除重放
+
+---
+
+## 1.1.2 (English)
+
+> Fixes wrong nav-table / sight-line bearings, runaway gearbox tracking and occasional stalls; "rotate to" now follows moving targets more closely.
+
+### Fixes
+
+- **Wrong first bearing for nav-table lines**: right after a physics structure is assembled, the projected position is not ready yet and the nav table reports its storage-area coordinate (tens of millions of blocks away), which was used as a world coordinate and produced a bogus first command. Such values are now discarded and the position is re-projected from the in-structure coordinate
+- **Gearbox drifting away from the target**: the control loop assumed "larger book angle = larger platform bearing". With a reversed gear train this turns into positive feedback, doubling the error every step and spinning the platform in full circles. The mod now derives the direction empirically from the previous book-angle change versus the measured bearing change, so it stays correct on any assembly
+- **Occasional freeze**: starting an angle command while the input shaft is stopped makes vanilla divide by zero, overflow the instruction duration into a negative number, so the sequence never finishes and every later command is rejected as "still busy". Commands are no longer started without rotation input, and a 40-tick watchdog force-resets a stalled sequence, so already-stuck worlds recover on their own
+- **Device bindings collapsing onto the same block**: after assembling or disassembling a physics structure, several devices could be resolved to one block. Bindings now exclude already-claimed coordinates and widen the search radius when needed
+- **Invalid angles no longer drive the gearbox**: when a peripheral is unloaded or the two line points coincide, no command is sent
+
+### Improvements
+
+- **"Rotate to" is now continuous tracking**: a turn is no longer split into segments (each segment had to finish and idle the shaft before the next one started, which made the motion stutter). The shaft keeps rotating and every tick only decides whether to reverse and when to stop, so the motion stays smooth while still following a crosshair or a moving target closely
+- **Peripheral selection for sight-line angles**: both the front and back slots now accept any bound peripheral, including nav tables and target locators
+- **Direction parameter display**: stored with stable English keys and localized on screen, while legacy Chinese values in old saves keep working
+
+### Notes
+
+- No save-format changes; drop-in upgrade. Gearboxes that are already stuck do not need to be broken and replaced
+
+---
+
 ## 1.1.1
 
 > 紧急修复：智能炮座装在物理结构上（飞行器、移动平台等）时无法正常瞄准。

@@ -160,6 +160,25 @@ public interface MachineHost {
     default void fireControlKillAll(String sentryDeviceId, String sightDeviceId, String order) {
     }
 
+    /**
+     * 瞄准组件佩戴者的朝向角；axis 为 horizontal（水平方位角）/ vertical（上下俯仰角）。
+     * 没选瞄准组件或没人佩戴时返回 NaN。
+     */
+    default double sightAngle(String sightDeviceId, String axis) {
+        return Double.NaN;
+    }
+
+    /** 准星相对"前→后"连线的偏差角（0° = 与连线同向）；没有佩戴者或外设缺失时返回 NaN。 */
+    default double sightLineBearing(String sightDeviceId, String deviceA, String deviceB) {
+        return Double.NaN;
+    }
+
+    /** 把准星连线角换算成指定齿轮箱的绝对目标角，可直接接「旋转至」。 */
+    default double sightLineAbsoluteTarget(String sightDeviceId, String deviceA, String deviceB,
+                                           String gearboxDevice) {
+        return Double.NaN;
+    }
+
     /** 动力臂内可用弹药：弹药箱里与当前武器匹配的备用弹药总数（不含弹匣内已有的）。 */
     default double sentryReserveAmmo(String sentryDeviceId) {
         return 0;

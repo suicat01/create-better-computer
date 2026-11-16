@@ -916,7 +916,9 @@ public final class ProgramVM {
                 String mode = modeKey(node.param("mode"));
                 float speed = (float) (counterClockwise ? -ratio : ratio);
                 // 旋转至选了"最短路径"时，方向改由差值决定，这里打上标记
-                if ("rotate_to".equals(mode) && direction.startsWith("最短")) {
+                // 方向参数新存档存英文键 shortest，旧存档存中文"最短路径"，两种都要认
+                if ("rotate_to".equals(mode)
+                        && (direction.equals("shortest") || direction.startsWith("最短"))) {
                     mode = "rotate_to_shortest";
                 }
                 // 每刻收尾记录只用于点动续期，这里先清掉再按当前模式重新登记
@@ -928,6 +930,11 @@ public final class ProgramVM {
                 } else if ("rotate_to".equals(mode) || "rotate_to_shortest".equals(mode)) {
                     // 旋转至：目标朝向相对零点，归一到一圈之内
                     value = ((value % 360) + 360) % 360;
+                }
+                if (Double.isNaN(value) || Double.isInfinite(value)) {
+                    // 上游坐标算不出来（外设没加载、连线两点重合）时不发指令，别让齿轮箱追着 NaN 乱转
+                    lastError = "齿轮箱目标角度无效";
+                    return "exec";
                 }
                 host.writeGearbox(node.param("device"), speed, mode, value);
                 // 点动需要每刻续期，这里记下"本刻执行过"；持续一直转，等停止积木打断
@@ -1255,6 +1262,18 @@ public final class ProgramVM {
                 yield Value.of(host.navBaselineAbsoluteTarget(
                         source.param("device_a"), source.param("device_b"), gearbox));
             }
+            // 准星连线角：方向来自瞄准组件的准星，不依赖导航台与目标
+            case "sight_line_angle" -> {
+                // 选"后"时把连线反过来看，等价于交换前后两个外设
+                boolean back = isBackDirection(source.param("direction"));
+                String deviceA = source.param(back ? "device_b" : "device_a");
+                String deviceB = source.param(back ? "device_a" : "device_b");
+                String gearbox = source.param("device_gearbox");
+                if (gearbox == null || gearbox.isBlank()) {
+                    yield Value.of(-host.sightLineBearing(source.param("sight"), deviceA, deviceB));
+                }
+                yield Value.of(host.sightLineAbsoluteTarget(source.param("sight"), deviceA, deviceB, gearbox));
+            }
             case "nav_line_direction" -> Value.of(lineSideOf(host.navBaselineBearing(
                     source.param("device_a"), source.param("device_b"))).equals(source.param("direction"))
                     && directionOf(host.readNavTable(source.param("device_a"), "bearing"))
@@ -1270,6 +1289,9 @@ public final class ProgramVM {
                     Math.abs(host.speedControllerSpeed(source.param("device"))));
             case "sentry_ammo" -> Value.of(host.sentryReserveAmmo(source.param("sentry")));
             case "sentry_magazine" -> Value.of(host.sentryMagazineAmmo(source.param("sentry")));
+            // 佩戴者朝向：水平按 MC 朝向（正南 0°），上下按俯仰角（抬头为正），都是度数
+            case "sight_angle" -> new Value.Num(host.sightAngle(source.param("sight"),
+                    source.param("axis")), false, "°");
             case "angle_math" -> angleMathChain(source, depth);
             case "angle_compare" -> Value.of(angleCompare(source.param("op"),
                     eval(source, "a", depth).asNumber(),
@@ -1613,28 +1635,31 @@ public final class ProgramVM {
         return node.param(port);
     }
 
-    /** 把方位角（-180° ~ +180°，正东为 0°）归入八方方位，返回内部键。 */
+    /**
+     * 把方位角（-180° ~ +180°，与 MC 原版一致：正南 0°、正西 90°、正北 ±180°、正东 -90°）
+     * 归入八方方位，返回内部键。
+     */
     private static String directionOf(double bearing) {
         if (bearing > -22.5 && bearing <= 22.5) {
-            return "east";
+            return "south";
         }
         if (bearing > 22.5 && bearing <= 67.5) {
-            return "northeast";
+            return "southwest";
         }
         if (bearing > 67.5 && bearing <= 112.5) {
-            return "north";
+            return "west";
         }
         if (bearing > 112.5 && bearing <= 157.5) {
             return "northwest";
         }
         if (bearing > 157.5 || bearing < -157.5) {
-            return "west";
+            return "north";
         }
         if (bearing >= -157.5 && bearing < -112.5) {
-            return "southwest";
+            return "northeast";
         }
         if (bearing >= -112.5 && bearing < -67.5) {
-            return "south";
+            return "east";
         }
         return "southeast";
     }
@@ -1642,6 +1667,12 @@ public final class ProgramVM {
     /** 把基线方位角（正对目标 = 0°）归入前 / 后两半。只用两档，所以以 ±90° 为界。 */
     private static String lineSideOf(double bearing) {
         return bearing > -90 && bearing <= 90 ? "front" : "back";
+    }
+
+    /** 前/后方向参数：新存档存 front/back，旧存档存"前/后"。 */
+    private static boolean isBackDirection(String direction) {
+        String text = direction == null ? "" : direction.trim();
+        return text.equals("back") || text.equals("后");
     }
 
     /** 方位角是否落在 [min, max] 区间内。 */

@@ -61,12 +61,13 @@ final class SimulatedReader {
     }
 
     /**
-     * 目标相对导航台的方位角，正东为 0°，向北（-Z）为正，范围 -180° ~ +180°。
+     * 目标相对导航台的方位角，与 MC 原版朝向一致：正南为 0°，向西为正，
+     * 正北为 ±180°，正东为 -90°，范围 -180° ~ +180°（等价于玩家的 yaw）。
      */
     private static double bearing(Vec3 self, Vec3 target) {
-        double east = target.x - self.x;
-        double north = self.z - target.z;
-        return Math.toDegrees(Math.atan2(north, east));
+        double dx = target.x - self.x;
+        double dz = target.z - self.z;
+        return Math.toDegrees(Math.atan2(-dx, dz));
     }
 
     /**

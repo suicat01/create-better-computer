@@ -173,7 +173,7 @@ public final class NodeTypes {
             List.of(new NodeType.Port("value", PortKind.BOOL)),
             List.of("device", "min", "max"), List.of("", "-180", "180"));
 
-    /** 目标在导航台的方位角：角度积木，产出角度（正东为 0°）。 */
+    /** 目标在导航台的方位角：角度积木，产出角度（与 MC 朝向一致，正南为 0°）。 */
     public static final NodeType NAV_BEARING_ANGLE = add("nav_bearing_angle", NodeCategory.AERO,
             List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
             List.of("device"), List.of(""));
@@ -200,6 +200,18 @@ public final class NodeTypes {
     public static final NodeType NAV_LINE_ANGLE = add("nav_line_angle", NodeCategory.AERO,
             List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
             List.of("device_a", "device_b", "direction", "device_gearbox"), List.of("", "", "前", ""));
+
+    /**
+     * 准星连线的方位角（角度积木）。
+     * <p>
+     * 与「导航台连线的目标角」同一套算法，但方向来源换成瞄准组件佩戴者的准星，
+     * 因此不需要导航台、也不需要目标，只靠前/后两个外设的连线定位。
+     * 选了齿轮箱时输出「旋转至」可直接用的绝对角；没选时输出偏差角（0° = 准星与连线同向）。
+     */
+    public static final NodeType SIGHT_LINE_ANGLE = add("sight_line_angle", NodeCategory.AERO,
+            List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
+            List.of("sight", "device_a", "device_b", "direction", "device_gearbox"),
+            List.of("", "", "", "front", ""));
 
     /** 当打字机按下某键时：只在按下那一刻触发一次，短按不会重复执行。 */
     public static final NodeType TYPEWRITER_KEY = add("typewriter_key", NodeCategory.EVENT,
@@ -289,6 +301,18 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("sentry", "sight", "order"), List.of("", "", "lock"));
+
+    /**
+     * 瞄准组件佩戴者的朝向角：水平输出视线在水平面上的方位角，上下输出俯仰角。
+     * <p>
+     * 水平方位角与 MC 原版朝向一致：正南为 0°、向西为正、正北为 ±180°、正东为 -90°，范围 -180°~180°；
+     * 上下为抬头正、低头负，范围 -90°~90°。
+     * 度数与齿轮箱角度一一对应，可以直接接「旋转至」或「定角」；
+     * 齿轮箱零点朝向需要按自己的结构自己对齐（可先用「齿轮箱归零」定一个基准）。
+     */
+    public static final NodeType SIGHT_ANGLE = add("sight_angle", NodeCategory.AERO,
+            List.of(), List.of(new NodeType.Port("value", PortKind.ANGLE)),
+            List.of("sight", "axis"), List.of("", "horizontal"));
 
     /**
      * 哨戒动力臂换弹：立即从动力臂的弹药箱里补满当前武器的弹匣。

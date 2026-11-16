@@ -30,6 +30,9 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
     /** 点动保活容差（刻）：超过这么久没收到续期就认为按键已松开。 */
     public static final int JOG_GRACE_TICKS = 2;
 
+    /** 指令卡住多少刻后强制复位（刻）。 */
+    private static final int STALL_TICKS = 40;
+
     /** 目标转速（RPM，带符号），仅用于持续/点动这类不定角的模式。 */
     private float targetSpeed;
     /** 点动模式：积木要求保持转动时为 true。 */
@@ -53,6 +56,18 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
     private double bookAngle;
     /** 待写入账面角度的增量；NaN 表示当前没有在等指令跑完。 */
     private double pendingBookDelta = Double.NaN;
+    /** 等指令跑完却毫无进展的连续刻数，超过上限就判定序列卡死。 */
+    private int stallTicks;
+    /** 旋转至的连续跟随状态：正在跟随时为 true。 */
+    private boolean tracking;
+    /** 跟随的目标角度（度）。 */
+    private double trackTarget;
+    /** 跟随使用的转速（RPM，带符号，绝对值即倍率档位）。 */
+    private float trackSpeed;
+    /** 跟随时是否走最短路径。 */
+    private boolean trackShortest;
+    /** 非最短路径跟随时的绕行方向：true 表示逆时针。 */
+    private boolean trackCounterClockwise;
 
     public CBGearboxBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.GEARBOX.get(), pos, state);
@@ -123,20 +138,18 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         // 会把"已到位"误判成"没到位"，于是再转一整圈。
         settlePendingBook();
         String baseMode = "rotate_to_shortest".equals(key) ? "rotate_to" : key;
-        // 旋转至是绝对目标：只看"是否已经到位"，不看指令是否重复、转速是否变化。
-        // 已在目标容差内就什么都不做，否则永远会再走一整圈。
-        if ("rotate_to".equals(baseMode) && isIdle()
-                && Math.abs(wrapAngle(relativeAngle() - wrapAngle(value))) < ANGLE_EPSILON) {
-            lastCommandMode = key;
-            lastCommandSpeed = speed;
-            lastCommandValue = value;
+        if ("rotate_to".equals(baseMode)) {
+            // 旋转至改成连续跟随，不再切成一段一段地转：
+            // 每段转完轴都要停一下再接下一段，动作会断成一节一节。
+            // 跟随时轴一直转，每刻只决定往哪边转、什么时候停，既连贯又不会错过新目标。
+            startTracking(speed, value, "rotate_to_shortest".equals(key), speed < 0);
             return;
         }
-        // 定角 / 旋转至一旦开跑，就不再接受新值：上游（比如连线方位角）每刻都在变，
+        // 定角一旦开跑，就不再接受新值：上游每刻都在变，
         // 若每刻都重写序列，原版 run(0) 会把 timer 清零，这条 TURN_ANGLE 永远跑不完，
         // 账面角度也就永远不结算，表现为角度读写恒为 0。
         // 这里只记录最后一次收到的值，等当前指令跑完后由下一 tick 自然接续。
-        if (("angle".equals(baseMode) || "rotate_to".equals(baseMode)) && !isIdle()) {
+        if ("angle".equals(baseMode) && !isIdle()) {
             lastCommandMode = key;
             lastCommandSpeed = speed;
             lastCommandValue = value;
@@ -162,11 +175,11 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         lastCommandMode = key;
         lastCommandSpeed = speed;
         lastCommandValue = value;
+        // 其它模式一律终止连续跟随
+        tracking = false;
 
         switch (key) {
-            case "angle" -> startAngleTurn(speed, value, false, false);
-            case "rotate_to" -> startAngleTurn(speed, value, true, false);
-            case "rotate_to_shortest" -> startAngleTurn(speed, value, true, true);
+            case "angle" -> startAngleTurn(speed, value);
             case "steady" -> {
                 // 持续转：写无限长的同向指令，由停止指令收尾
                 startSteady(speed);
@@ -180,16 +193,18 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
     }
 
     /**
-     * 定角 / 旋转至：往序列表写一条 {@code TURN_ANGLE}，交给原版跑。
+     * 定角：往序列表写一条 {@code TURN_ANGLE}，交给原版跑。
      * <p>
      * 原版 {@code getDuration} 会算 {@code ceil(|角度| / convertToAngular(转速×倍率)) + 2}，
      * 这就是“转这么多度”的原生实现。倍率取正号正转、负号反转。
      */
-    private void startAngleTurn(float speed, double value, boolean absolute, boolean shortest) {
-        double degrees = absolute ? turnDelta(value, shortest, speed < 0) : value;
+    private void startAngleTurn(float speed, double degrees) {
         int magnitude = (int) Math.round(Math.abs(degrees));
         if (magnitude <= 0) {
             stopRotation();
+            return;
+        }
+        if (!hasRotationInput()) {
             return;
         }
         // 倍率相对输入轴：输入反向时 FORWARD 的实际旋转也反向，
@@ -201,26 +216,83 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         startSequence();
     }
 
+    // ---------------------------------------------------------------- 连续跟随
+
     /**
-     * 旋转至要转多少度、往哪转。
-     *
-     * @param shortest      true 走最短路径：比较两个方向，取转得少的那个
-     * @param counterClockwise 非最短路径时，按积木选的时钟方向绕过去
+     * 开始 / 更新“旋转至”的连续跟随。
+     * <p>
+     * 不切段、不排队：序列里常驻一条极长的同向 {@code TURN_ANGLE}，轴一直在转，
+     * 每刻只判断残差要不要换向、要不要停。
      */
-    private double turnDelta(double targetValue, boolean shortest, boolean counterClockwise) {
-        double diff = wrapAngle(wrapAngle(targetValue) - relativeAngle());
-        // 已在目标位置：不再绕一整圈
-        if (Math.abs(diff) < ANGLE_EPSILON) {
-            return 0;
+    private void startTracking(float speed, double target, boolean shortest, boolean counterClockwise) {
+        tracking = true;
+        trackTarget = target;
+        trackSpeed = speed;
+        trackShortest = shortest;
+        trackCounterClockwise = counterClockwise;
+        lastCommandMode = shortest ? "rotate_to_shortest" : "rotate_to";
+        lastCommandSpeed = speed;
+        lastCommandValue = target;
+        tickTracking();
+    }
+
+    /** 连续跟随的一次推进：本刻要不要换向、要不要停。 */
+    private void tickTracking() {
+        if (!tracking) {
+            return;
         }
-        if (shortest) {
-            // wrapAngle 已归到 -180 ~ +180，绝对值就是较短的方向
-            return diff;
+        if (!hasRotationInput()) {
+            // 轴没转，转了也推不动；等它转起来自然接上
+            return;
         }
-        if (counterClockwise) {
-            return diff > 0 ? diff - 360 : diff;
+        double residual = wrapAngle(wrapAngle(trackTarget) - relativeAngle());
+        // 本装置一刻能转过的度数：输入转速(RPM) × 倍率档位 × 0.3（原版的角度换算）
+        double perTick = Math.abs(speed) * Math.abs(trackSpeed) * 0.3;
+        // 已经近到一步就能跨过去时再转只会来回抖，直接停
+        if (Math.abs(residual) <= Math.max(ANGLE_EPSILON, perTick * 0.6)) {
+            stopTracking();
+            return;
         }
-        return diff < 0 ? diff + 360 : diff;
+        boolean increase = residual > 0;
+        if (!trackShortest) {
+            // 绕过去：把残差按积木选的时钟方向换算成“还要往这边走多少度”
+            double along = trackCounterClockwise
+                    ? (residual > 0 ? residual - 360 : residual)
+                    : (residual < 0 ? residual + 360 : residual);
+            increase = along > 0;
+        }
+        float direction = increase ? Math.abs(trackSpeed) : -Math.abs(trackSpeed);
+        boolean sameAsRunning = !isIdle()
+                && Math.signum(getModifier()) == Math.signum(direction)
+                && Math.abs(Math.abs(getModifier()) - Math.abs(trackSpeed)) < 1e-3f;
+        if (sameAsRunning) {
+            // 已经朝需要的方向、需要的档位在转，保持不动，绝不能每刻重写序列打断转动
+            return;
+        }
+        if (!isIdle()) {
+            run(-1);
+        }
+        replaceSequence(new Instruction(SequencerInstructions.TURN_ANGLE,
+                directionModifier(direction), 36000));
+        run(0);
+        sendData();
+        setChanged();
+    }
+
+    /** 结束跟随：停在当前位置。 */
+    private void stopTracking() {
+        if (!tracking) {
+            return;
+        }
+        tracking = false;
+        if (level == null || level.isClientSide) {
+            return;
+        }
+        if (!isIdle()) {
+            run(-1);
+        }
+        sendData();
+        setChanged();
     }
 
     /** 持续转 / 点动：写一条极长的同向 TURN_ANGLE，靠停止指令打断。 */
@@ -230,8 +302,23 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
             // 方向没变就沿用，避免每刻重置 timer
             return;
         }
+        if (!hasRotationInput()) {
+            return;
+        }
         replaceSequence(new Instruction(SequencerInstructions.TURN_ANGLE, modifier, 36000));
         startSequence();
+    }
+
+    /**
+     * 输入轴是否在转。
+     * <p>
+     * 原版计算指令时长用的是 {@code ceil(|角度| / convertToAngular(转速))}，
+     * 转速为 0 时会算出无穷大、转成 int 后溢出成负数，序列永远推进不下去；
+     * 更糟的是此时 {@code isIdle()} 一直为 false，之后所有指令都会被“还没跑完”挡掉，
+     * 表现就是卡住不转。所以轴不转的时候干脆不发起指令，等它转起来那一刻再发。
+     */
+    private boolean hasRotationInput() {
+        return Math.abs(getTheoreticalSpeed()) > 1e-3f;
     }
 
     /**
@@ -285,6 +372,7 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
     public void stopRotation() {
         targetSpeed = 0;
         jogHeld = false;
+        tracking = false;
         // 被打断的定角不计入账面角度：这笔账没有跑完
         pendingBookDelta = Double.NaN;
         if (level == null || level.isClientSide) {
@@ -331,9 +419,17 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         }
         // 物理侧积分只用于视觉，不参与任何判定
         angleAccum += getModifier() * speed * 0.3;
+        if (tracking) {
+            // 跟随时轴一直在转、也不会跑到指令末尾，账面角度按原版换算逐刻累积，
+            // 这样 relativeAngle 始终等于平台真实朝向
+            bookAngle += getModifier() * speed * 0.3;
+        }
         // 每刻都尝试结账：本刻可能刚好跑完。settlePendingBook 自己会判断是否空闲，
         // 否则一次性定角在跑完后再也没有积木调用 applyCommand，账面角度就永远不加。
         settlePendingBook();
+        // 连续跟随：每刻决定换不换向、要不要停
+        tickTracking();
+        watchStalledTurn();
         // 点动：积木停止续期就停
         if (jogHeld && level.getGameTime() - jogLastSeen > JOG_GRACE_TICKS) {
             stopRotation();
@@ -352,6 +448,29 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity {
         }
         bookAngle += pendingBookDelta;
         pendingBookDelta = Double.NaN;
+        setChanged();
+    }
+
+    /**
+     * 看门狗：序列里挂着一条指令，输入轴却一直没转。
+     * <p>
+     * 这类指令在原版里是按“转够多少度”折算时长的，轴不转就永远跑不完，
+     * {@code isIdle()} 会一直是 false，之后每条指令都被挡在门外，表现就是彻底卡住不转
+     * （存档里遗留一条没跑完的指令也会这样）。这里直接丢掉这笔账并强制回空闲，
+     * 让积木下一刻重新下发。
+     */
+    private void watchStalledTurn() {
+        if (isIdle() || hasRotationInput()) {
+            stallTicks = 0;
+            return;
+        }
+        if (++stallTicks < STALL_TICKS) {
+            return;
+        }
+        stallTicks = 0;
+        pendingBookDelta = Double.NaN;
+        run(-1);
+        sendData();
         setChanged();
     }
 
