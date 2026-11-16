@@ -148,6 +148,18 @@ public interface MachineHost {
     default void sentryReload(String sentryDeviceId) {
     }
 
+    /** 清除瞄准组件锁定的全部目标。 */
+    default void sightLockClearAll(String sightDeviceId) {
+    }
+
+    /** 清除瞄准组件最后一个锁定的目标。 */
+    default void sightLockClearLast(String sightDeviceId) {
+    }
+
+    /** 让火控单位按锁定表逐个瞄准并击杀目标；order 为 lock / name / health。 */
+    default void fireControlKillAll(String sentryDeviceId, String sightDeviceId, String order) {
+    }
+
     /** 动力臂内可用弹药：弹药箱里与当前武器匹配的备用弹药总数（不含弹匣内已有的）。 */
     default double sentryReserveAmmo(String sentryDeviceId) {
         return 0;

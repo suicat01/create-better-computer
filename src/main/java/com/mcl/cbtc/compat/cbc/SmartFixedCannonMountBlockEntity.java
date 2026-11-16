@@ -23,10 +23,12 @@ public class SmartFixedCannonMountBlockEntity extends FixedCannonMountBlockEntit
      * 所以这里写入相对角后，超出范围时炮座会停在允许的最大角度上，而不是指向错误方向。
      */
     public void cbtc$aimAt(Vec3 target) {
-        if (mountedContraption == null || target == null) {
+        if (mountedContraption == null || target == null || getLevel() == null) {
             return;
         }
-        Vec3 dir = target.subtract(getInteractionLocation());
+        // 炮座在物理结构上时方块坐标在结构存储区，先把世界目标换算到同一坐标系
+        Vec3 localTarget = com.mcl.cbtc.device.Devices.toLocalSpace(getLevel(), getBlockPos(), target);
+        Vec3 dir = localTarget.subtract(getInteractionLocation());
         if (dir.lengthSqr() < 1.0E-6D) {
             return;
         }

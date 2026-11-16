@@ -1,0 +1,98 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "cbtc:target_locator"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:target_locator"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:target_locator"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:target_locator"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:target_locator"
+        },
+        {
+          "item": "minecraft:spyglass"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:target_locator"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:target_locator"
+        },
+        {
+          "item": "create:precision_mechanism"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:target_locator"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:target_locator"
+        },
+        {
+          "item": "minecraft:leather"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:target_locator"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:target_locator"
+        },
+        {
+          "item": "create:brass_sheet"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:target_locator"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:gunner_sight",
+      "count": 1
+    }
+  ]
+}

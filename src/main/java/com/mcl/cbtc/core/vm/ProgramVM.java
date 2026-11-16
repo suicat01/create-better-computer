@@ -961,6 +961,19 @@ public final class ProgramVM {
                 host.sentryReload(node.param("sentry"));
                 return "exec";
             }
+            case "sight_lock_clear_all" -> {
+                host.sightLockClearAll(node.param("sight"));
+                return "exec";
+            }
+            case "sight_lock_clear_last" -> {
+                host.sightLockClearLast(node.param("sight"));
+                return "exec";
+            }
+            case "fire_control_kill_all" -> {
+                // 启动后由火控单位每刻自动处理锁定表，瞄准/开火积木在此期间被忽略
+                host.fireControlKillAll(node.param("sentry"), node.param("sight"), node.param("order"));
+                return "exec";
+            }
             case "speed_controller_set" -> {
                 // 转速填绝对值，方向由顺逆时针选择器决定
                 double rpm = Math.abs(numberOrParam(node, "rpm"));

@@ -16,6 +16,9 @@ public final class KeyNames {
         // 枪式遥控器把鼠标左右键当成两个"按键"，键码与 GLFW 鼠标键一致
         NAMES.put(GLFW.GLFW_MOUSE_BUTTON_LEFT, "鼠标左键");
         NAMES.put(GLFW.GLFW_MOUSE_BUTTON_RIGHT, "鼠标右键");
+        // 全能枪式遥控器额外读取两个侧键
+        NAMES.put(GLFW.GLFW_MOUSE_BUTTON_4, "鼠标侧键 1");
+        NAMES.put(GLFW.GLFW_MOUSE_BUTTON_5, "鼠标侧键 2");
         for (char c = 'A'; c <= 'Z'; c++) {
             NAMES.put(GLFW.GLFW_KEY_A + (c - 'A'), String.valueOf(c));
         }

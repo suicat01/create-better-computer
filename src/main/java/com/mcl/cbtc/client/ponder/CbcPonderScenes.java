@@ -123,6 +123,13 @@ public final class CbcPonderScenes {
         // 九种讲解石变种共用同一个思索场景
         helper.forComponents(LECTURE_STONES)
                 .addStoryBoard("lecture_stone", CbcPonderScenes::lectureStone, COMPUTER_TAG);
+        // 火控单位：智能炮座依赖 CBC，未安装时不注册
+        if (com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
+            helper.addStoryBoard(CreateBetterComputer.asResource("smart_cannon_mount"), "smart_cannon_mount",
+                    CbcPonderScenes::smartCannonMount, COMPUTER_TAG);
+            helper.addStoryBoard(CreateBetterComputer.asResource("smart_fixed_cannon_mount"), "smart_fixed_cannon_mount",
+                    CbcPonderScenes::smartFixedCannonMount, COMPUTER_TAG);
+        }
     }
 
     /** 模块卡场景结构相同，只是展示的物品与文案不同。 */
@@ -158,6 +165,11 @@ public final class CbcPonderScenes {
                 .add(CreateBetterComputer.asResource("hard_drive"))
                 .add(CreateBetterComputer.asResource("target_locator"))
                 .add(CreateBetterComputer.asResource("lodestone_charm"));
+        if (com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
+            helper.addToTag(COMPUTER_TAG)
+                    .add(CreateBetterComputer.asResource("smart_cannon_mount"))
+                    .add(CreateBetterComputer.asResource("smart_fixed_cannon_mount"));
+        }
         for (ResourceLocation stone : LECTURE_STONES) {
             helper.addToTag(COMPUTER_TAG).add(stone);
         }
@@ -179,6 +191,80 @@ public final class CbcPonderScenes {
         helper.addToTag(SUPER_BLAZE_TAG)
                 .add(CreateBetterComputer.asResource("super_blaze_spawn_egg"))
                 .add(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", "blaze_cake"));
+    }
+
+    /** 智能炮座：CBC 火炮底座复刻，无传动轴，红石组装开火，可被电脑瞄准。 */
+    private static void smartCannonMount(SceneBuilder scene, SceneBuildingUtil util) {
+        scene.title("smart_cannon_mount", "Smart Cannon Mount");
+        scene.configureBasePlate(0, 0, 5);
+        scene.scaleSceneView(0.9F);
+        scene.showBasePlate();
+        scene.idle(10);
+        BlockPos mount = util.grid().at(2, 1, 2);
+        Vec3 top = util.vector().topOf(mount);
+        scene.world().setBlock(mount,
+                com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT.get().defaultBlockState(), true);
+        scene.world().showSection(util.select().position(mount), Direction.DOWN);
+        scene.idle(15);
+
+        scene.overlay().showText(80)
+                .text("A Create Big Cannons cannon mount rebuilt with no drive shaft")
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.overlay().showText(80)
+                .text("Redstone assembles the cannon on one side and fires it from the other")
+                .colored(PonderPalette.BLUE)
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.overlay().showText(80)
+                .text("Bind it as a Fire Control Unit and the CB Computer can aim it")
+                .colored(PonderPalette.GREEN)
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.markAsFinished();
+    }
+
+    /** 智能固定炮座：单方块固定底座，偏航/俯仰沿用原版 ±45° 滚轮。 */
+    private static void smartFixedCannonMount(SceneBuilder scene, SceneBuildingUtil util) {
+        scene.title("smart_fixed_cannon_mount", "Smart Fixed Cannon Mount");
+        scene.configureBasePlate(0, 0, 5);
+        scene.scaleSceneView(0.9F);
+        scene.showBasePlate();
+        scene.idle(10);
+        BlockPos mount = util.grid().at(2, 1, 2);
+        Vec3 top = util.vector().topOf(mount);
+        scene.world().setBlock(mount,
+                com.mcl.cbtc.compat.cbc.CbcCannons.SMART_FIXED_CANNON_MOUNT.get().defaultBlockState(), true);
+        scene.world().showSection(util.select().position(mount), Direction.DOWN);
+        scene.idle(15);
+
+        scene.overlay().showText(80)
+                .text("A fixed cannon mount that takes the whole block")
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.overlay().showText(80)
+                .text("Redstone assembles and fires it, just like the vanilla mount")
+                .colored(PonderPalette.BLUE)
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.overlay().showText(80)
+                .text("Its pitch and yaw wheels keep the vanilla ±45° range; a bound computer aims within it")
+                .colored(PonderPalette.GREEN)
+                .pointAt(top)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+        scene.markAsFinished();
     }
 
     /**

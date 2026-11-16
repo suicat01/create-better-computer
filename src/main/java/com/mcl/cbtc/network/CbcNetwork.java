@@ -54,6 +54,28 @@ public final class CbcNetwork {
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onDeviceSelect(payload)));
         registrar.playToClient(SightTargetsPayload.TYPE, SightTargetsPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onSightTargets(payload)));
+        registrar.playToServer(GunnerSightLockPayload.TYPE, GunnerSightLockPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (!(context.player() instanceof net.minecraft.server.level.ServerPlayer player)
+                            || !(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+                        return;
+                    }
+                    String sightId = payload.sightId();
+                    if (!com.mcl.cbtc.device.GunnerSightLocks.wears(player, sightId)) {
+                        return;
+                    }
+                    net.minecraft.world.entity.Entity entity = level.getEntity(payload.entityId());
+                    if (entity == null || entity == player || entity.distanceToSqr(player) > 64.0D * 64.0D) {
+                        return;
+                    }
+                    int seq = com.mcl.cbtc.device.GunnerSightLocks.lock(sightId, level, entity);
+                    com.mcl.cbtc.device.GunnerSightLocks.sync(level, sightId);
+                    // 锁定成功后在动作栏回一个序号，玩家不用等雷达投影也能确认
+                    player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                            "cbtc.msg.sight_locked", seq, entity.getDisplayName()), true);
+                }));
+        registrar.playToClient(GunnerSightLocksPayload.TYPE, GunnerSightLocksPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> ClientHandlers.onSightLocks(payload)));
         registrar.playToServer(DeviceBindPayload.TYPE, DeviceBindPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> {
                     var stack = context.player().getItemInHand(payload.hand());

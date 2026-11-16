@@ -77,6 +77,11 @@ public final class ClientHandlers {
         com.mcl.cbtc.client.GunnerSightTargets.accept(payload.dimension(), payload.targets());
     }
 
+    /** 锁定表：更新戴着瞄准组件的玩家屏幕上要标绿并显示序号的实体。 */
+    public static void onSightLocks(GunnerSightLocksPayload payload) {
+        com.mcl.cbtc.client.GunnerSightLocksClient.accept(payload);
+    }
+
     /** 局域网加入结果：在聊天栏下方提示成功或失败原因。 */
     public static void onLanJoinResult(LanJoinResultPayload payload) {
         var player = Minecraft.getInstance().player;

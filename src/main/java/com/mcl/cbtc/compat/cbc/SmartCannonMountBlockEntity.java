@@ -23,10 +23,12 @@ public class SmartCannonMountBlockEntity extends CannonMountBlockEntity {
     /** 火控单位：让已组装的炮管瞄准世界坐标中的一点。 */
     public void cbtc$aimAt(Vec3 target) {
         PitchOrientedContraptionEntity cannon = getContraption();
-        if (cannon == null || target == null) {
+        if (cannon == null || target == null || getLevel() == null) {
             return;
         }
-        Vec3 dir = target.subtract(getInteractionLocation());
+        // 炮座在物理结构上时方块坐标在结构存储区，先把世界目标换算到同一坐标系
+        Vec3 localTarget = com.mcl.cbtc.device.Devices.toLocalSpace(getLevel(), getBlockPos(), target);
+        Vec3 dir = localTarget.subtract(getInteractionLocation());
         if (dir.lengthSqr() < 1.0E-6D) {
             return;
         }

@@ -1,0 +1,130 @@
+{
+  "type": "create:sequenced_assembly",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "createbigcannons"
+    }
+  ],
+  "ingredient": {
+    "item": "createbigcannons:fixed_cannon_mount"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "createbigcannons:fixed_cannon_mount"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        },
+        {
+          "item": "create:brass_block"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:cutting",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        },
+        {
+          "item": "cbtc:blaze_compute_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        },
+        {
+          "item": "cbtc:super_blaze_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "createbigcannons:fixed_cannon_mount"
+        },
+        {
+          "item": "cbtc:super_blaze_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "createbigcannons:fixed_cannon_mount"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:smart_fixed_cannon_mount",
+      "count": 1
+    }
+  ]
+}

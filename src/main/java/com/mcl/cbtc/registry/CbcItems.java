@@ -126,6 +126,11 @@ public final class CbcItems {
             ITEMS.register("gun_remote", () -> new com.mcl.cbtc.item.GunRemoteItem(
                     new Item.Properties().stacksTo(1)));
 
+    /** 全能枪式遥控器：鼠标左右键 + 两个侧键 + 整个键盘。 */
+    public static final DeferredItem<com.mcl.cbtc.item.AllGunRemoteItem> ALL_GUN_REMOTE =
+            ITEMS.register("all_gun_remote", () -> new com.mcl.cbtc.item.AllGunRemoteItem(
+                    new Item.Properties().stacksTo(1)));
+
     public static final DeferredItem<com.mcl.cbtc.item.BoundCompassItem> BOUND_COMPASS =
             ITEMS.register("bound_compass", () -> new com.mcl.cbtc.item.BoundCompassItem(
                     new Item.Properties().stacksTo(1)));

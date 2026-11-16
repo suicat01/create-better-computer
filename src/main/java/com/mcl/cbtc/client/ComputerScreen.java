@@ -1072,6 +1072,33 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
+        if ("sight_lock_clear_all".equals(type.id())) {
+            // 清除 [瞄准组件] 的所有锁定目标
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sight_lock_clear_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sight_lock_clear_all_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sight_lock_clear_last".equals(type.id())) {
+            // 清除 [瞄准组件] 的上一个锁定目标
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sight_lock_clear_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            addText(layout.headerItems, cursor, tr("cbtc.gui.sight_lock_clear_last_tail"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("fire_control_kill_all".equals(type.id())) {
+            // 让 [火控单位] 瞄准并击杀 [瞄准组件] 的所有目标，排序方式 […]
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.fire_control_kill_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.fire_control_kill_mid"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.fire_control_kill_tail"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("order"));
+            finishHeader(n, layout, depth);
+            return;
+        }
         int operator = operatorIndex(n);
         int keyIndex = 0;
         for (NodeType.Port port : type.inputs()) {
@@ -1748,6 +1775,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "device_gearbox".equals(t.params().get(index))) {
             return deviceNameOf(stored);
         }
+        // 火控击杀的排序方式存英文键，界面上显示中文
+        if ("order".equals(t.params().get(index)) && "fire_control_kill_all".equals(n.typeId())) {
+            return lockOrderLabel(stored);
+        }
         // 局域网参数只认单个网，没选时提示去选
         if ("network".equals(t.params().get(index))) {
             return stored.isBlank() ? Component.translatable("cbtc.gui.lan_select").getString() : stored;
@@ -2110,7 +2141,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "speed_controller_set".equals(type.id())
                 || "sentry_aim".equals(type.id()) || "sentry_fire".equals(type.id())
                 || "sentry_reload".equals(type.id())
-                || "sentry_ammo".equals(type.id()) || "sentry_magazine".equals(type.id());
+                || "sentry_ammo".equals(type.id()) || "sentry_magazine".equals(type.id())
+                || "sight_lock_clear_all".equals(type.id()) || "sight_lock_clear_last".equals(type.id())
+                || "fire_control_kill_all".equals(type.id());
     }
 
     /** 目标定位模块相关积木：只能选已绑定的定位模块。 */
@@ -2890,8 +2923,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        // 按键拾取：这次按下的鼠标左右键直接绑定为对应按键（0=左键，1=右键）
-        if (keyCaptureNode != null && (button == 0 || button == 1)) {
+        // 按键拾取：这次按下的鼠标键直接绑定为对应按键（0=左键，1=右键，3/4=侧键）
+        if (keyCaptureNode != null && (button == 0 || button == 1 || button == 3 || button == 4)) {
             Node target = keyCaptureNode;
             keyCaptureNode = null;
             target.setParam("key", Integer.toString(button));
@@ -4156,6 +4189,12 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             }
             return names.toArray(String[]::new);
         }
+        if ("lock_order".equals(menuKind(node, index))) {
+            return new String[]{
+                    tr("cbtc.gui.lock_order_lock"),
+                    tr("cbtc.gui.lock_order_name"),
+                    tr("cbtc.gui.lock_order_health")};
+        }
         if ("info_device".equals(menuKind(node, index))) {
             java.util.List<String> names = new java.util.ArrayList<>();
             for (var device : infoTransmitterCandidates()) {
@@ -4399,6 +4438,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             }
             return "";
         }
+        if ("lock_order".equals(menuKind(node, index))) {
+            return LOCK_ORDERS[optionIndex];
+        }
         if ("locator_device".equals(menuKind(node, index))) {
             java.util.List<com.mcl.cbtc.network.DeviceListPayload.Entry> candidates = new java.util.ArrayList<>();
             for (var device : peripheralDevices) {
@@ -4473,6 +4515,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("sentry".equals(key)) {
             return "sentry_device";
         }
+        if ("order".equals(key) && "fire_control_kill_all".equals(node.typeId())) {
+            return "lock_order";
+        }
         if (!"device".equals(key)) {
             return "";
         }
@@ -4500,6 +4545,18 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     /** 歌词可选的语言：网络音乐机只提供中文译文与原文。 */
     private static final String[] MUSIC_LANGUAGES = {"translated", "original"};
+
+    /** 火控击杀的排序方式：锁定先后 / 名字首字母 / 血量最高优先。 */
+    private static final String[] LOCK_ORDERS = {"lock", "name", "health"};
+
+    /** 火控击杀排序方式的本地化显示。 */
+    private static String lockOrderLabel(String stored) {
+        return switch (stored) {
+            case "name" -> tr("cbtc.gui.lock_order_name");
+            case "health" -> tr("cbtc.gui.lock_order_health");
+            default -> tr("cbtc.gui.lock_order_lock");
+        };
+    }
 
     /** 播放声音 / 默念 / 停止声音 / 网络歌曲：设备参数指的是"由谁来发声"。 */
     private static boolean isSoundDeviceNode(String typeId) {
@@ -4661,6 +4718,14 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         // 雷达映射：雷达与瞄准组件都从已绑定外设里选
         if ("radar_device".equals(menuKind(n, index)) || "sight_device".equals(menuKind(n, index))
                 || "sentry_device".equals(menuKind(n, index))) {
+            commitParamEdit();
+            deviceMenuNode = n;
+            deviceMenuIndex = index;
+            deviceMenuScroll = 0;
+            return;
+        }
+        // 火控击杀的排序方式：三项固定候选
+        if ("lock_order".equals(menuKind(n, index))) {
             commitParamEdit();
             deviceMenuNode = n;
             deviceMenuIndex = index;

@@ -1,0 +1,79 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "cbtc:gun_remote"
+  },
+  "loops": 1,
+  "transitional_item": {
+    "id": "cbtc:gun_remote"
+  },
+  "sequence": [
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:gun_remote"
+        },
+        {
+          "item": "cbtc:blaze_compute_chip"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:gun_remote"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:gun_remote"
+        },
+        {
+          "item": "cbtc:typewriter"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:gun_remote"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "cbtc:gun_remote"
+        },
+        {
+          "item": "cbtc:integrated_circuit"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:gun_remote"
+        }
+      ]
+    },
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "cbtc:gun_remote"
+        }
+      ],
+      "results": [
+        {
+          "id": "cbtc:gun_remote"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "id": "cbtc:all_gun_remote",
+      "count": 1
+    }
+  ]
+}

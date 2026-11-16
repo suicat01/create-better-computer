@@ -111,6 +111,23 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     /** 连线方位角缺少 B 设备时的提示节流，避免每刻刷日志。 */
     private long lastNavLineWarnTick = -1000;
 
+    /** 火控单位正在执行的「瞄准并击杀全部锁定目标」任务；null 表示没有任务。 */
+    @Nullable
+    private KillJob killJob;
+
+    /** 火控击杀任务：任务期间持续瞄准并开火，玩家的瞄准/开火指令被忽略。 */
+    private static final class KillJob {
+        final String sentryId;
+        final String sightId;
+        final String order;
+
+        KillJob(String sentryId, String sightId, String order) {
+            this.sentryId = sentryId;
+            this.sightId = sightId;
+            this.order = order;
+        }
+    }
+
     public CBComputerBlockEntity(BlockPos pos, BlockState state) {
         super(CbcBlockEntities.COMPUTER.get(), pos, state);
         this.link = new LinkEndpoint(() -> this.level, pos, true);
@@ -167,6 +184,8 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                 vm.receiveWirelessRedstone(wirelessReceived);
             }
             vm.tick(serverLevel.getGameTime());
+            // 火控击杀任务独立于积木执行流运行，每刻推进一次
+            tickKillJob();
         }
         // 发信积木"按住才亮"：本刻没再执行就熄灭，关机时也走这里清零
         tickWirelessTransmitter();
@@ -212,6 +231,8 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             }
         } else {
             vm.reset();
+            // 关机时火控击杀任务一并结束，避免重新开机后继续抢占瞄准/开火
+            killJob = null;
             leaveLan();
             leaveInternet();
             // 关机时正在放的网络歌曲也要一起停掉
@@ -1249,6 +1270,10 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         if (!(level instanceof ServerLevel serverLevel) || !com.mcl.cbtc.device.Devices.hasFireControl()) {
             return;
         }
+        // 锁定击杀任务期间，瞄准指令交给任务自己处理
+        if (killJob != null && killJob.sentryId.equals(sentryDeviceId)) {
+            return;
+        }
         java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
         net.minecraft.world.level.block.entity.BlockEntity arm = sentryArm(devices.get(sentryDeviceId));
         com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
@@ -1290,6 +1315,10 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         if (!(level instanceof ServerLevel) || !com.mcl.cbtc.device.Devices.hasSentry()) {
             return;
         }
+        // 锁定击杀任务期间，开火节奏同样由任务接管
+        if (killJob != null && killJob.sentryId.equals(sentryDeviceId)) {
+            return;
+        }
         net.minecraft.world.level.block.entity.BlockEntity arm =
                 sentryArm(boundDevices().get(sentryDeviceId));
         if (arm != null) {
@@ -1308,6 +1337,138 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         if (arm != null) {
             com.mcl.cbtc.compat.SentryArmCompat.reload(arm);
         }
+    }
+
+    /** 清除瞄准组件锁定的全部目标。 */
+    @Override
+    public void sightLockClearAll(String sightDeviceId) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = boundDevices().get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        com.mcl.cbtc.device.GunnerSightLocks.clearAll(sight.id());
+        com.mcl.cbtc.device.GunnerSightLocks.sync(serverLevel, sight.id());
+    }
+
+    /** 清除瞄准组件最后一个锁定的目标。 */
+    @Override
+    public void sightLockClearLast(String sightDeviceId) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = boundDevices().get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        if (com.mcl.cbtc.device.GunnerSightLocks.clearLast(sight.id())) {
+            com.mcl.cbtc.device.GunnerSightLocks.sync(serverLevel, sight.id());
+        }
+    }
+
+    /**
+     * 火控单位瞄准并击杀瞄准组件锁定的全部目标。
+     * <p>
+     * 启动后由 {@link #tickKillJob} 每刻接管瞄准与开火，直到锁定表清空；
+     * 目标暂时打不到时保持瞄准等待，不会跳过。
+     */
+    @Override
+    public void fireControlKillAll(String sentryDeviceId, String sightDeviceId, String order) {
+        if (!(level instanceof ServerLevel)) {
+            return;
+        }
+        java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
+        com.mcl.cbtc.item.DeviceModuleItem.Device sentry = devices.get(sentryDeviceId);
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
+        if (sentry == null || sentry.kind() != com.mcl.cbtc.device.DeviceKind.SENTRY_ARM
+                || sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        killJob = new KillJob(sentry.id(), sight.id(),
+                order == null || order.isBlank() ? "lock" : order.trim());
+    }
+
+    /** 火控击杀任务的每刻推进：挑第一个目标、瞄准，能打到就扣扳机。 */
+    private void tickKillJob() {
+        if (killJob == null) {
+            return;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity arm = sentryArm(boundDevices().get(killJob.sentryId));
+        if (arm == null || !(arm.getLevel() instanceof ServerLevel armLevel)) {
+            killJob = null;
+            return;
+        }
+        java.util.Map<java.util.UUID, Integer> seqs = new java.util.HashMap<>();
+        java.util.List<net.minecraft.world.entity.Entity> targets = new java.util.ArrayList<>();
+        boolean changed = false;
+        for (com.mcl.cbtc.device.GunnerSightLocks.Locked locked
+                : com.mcl.cbtc.device.GunnerSightLocks.all(killJob.sightId)) {
+            if (!locked.dimension().equals(armLevel.dimension())) {
+                continue;
+            }
+            net.minecraft.world.entity.Entity entity = armLevel.getEntity(locked.entity());
+            if (entity == null || !entity.isAlive()) {
+                // 已经死亡或离开世界，从锁定表里划掉
+                com.mcl.cbtc.device.GunnerSightLocks.remove(killJob.sightId, locked.entity());
+                changed = true;
+                continue;
+            }
+            seqs.put(entity.getUUID(), locked.seq());
+            targets.add(entity);
+        }
+        if (changed) {
+            com.mcl.cbtc.device.GunnerSightLocks.sync(armLevel, killJob.sightId);
+        }
+        if (targets.isEmpty()) {
+            killJob = null;
+            return;
+        }
+        targets.sort(switch (killJob.order) {
+            case "name" -> java.util.Comparator.comparing(
+                    (net.minecraft.world.entity.Entity entity) -> entity.getName().getString(),
+                    String.CASE_INSENSITIVE_ORDER);
+            case "health" -> java.util.Comparator.<net.minecraft.world.entity.Entity>comparingDouble(
+                    entity -> entity instanceof net.minecraft.world.entity.LivingEntity living
+                            ? living.getMaxHealth() : 0.0F).reversed();
+            default -> java.util.Comparator.comparingInt(
+                    entity -> seqs.getOrDefault(entity.getUUID(), Integer.MAX_VALUE));
+        });
+        net.minecraft.world.entity.Entity target = targets.get(0);
+        net.minecraft.world.phys.Vec3 point = target.getBoundingBox().getCenter();
+        if (cbtc$isSmartMount(arm)) {
+            // 智能炮座只跟随转动，开火仍由红石控制
+            com.mcl.cbtc.compat.cbc.CannonMountCompat.aim(arm, point);
+            return;
+        }
+        if (!com.mcl.cbtc.device.Devices.hasSentry()) {
+            return;
+        }
+        com.mcl.cbtc.compat.SentryArmCompat.aim(arm, point);
+        // 打不到就先保持瞄准等待，等目标进入可攻击状态再扣扳机
+        if (cbtc$canHitTarget(arm, armLevel, target)) {
+            com.mcl.cbtc.compat.SentryArmCompat.fire(arm);
+        }
+    }
+
+    /** 火控单位能否打到目标：距离在射程内且视线没有被方块挡住。 */
+    private static boolean cbtc$canHitTarget(net.minecraft.world.level.block.entity.BlockEntity arm,
+                                              ServerLevel level, net.minecraft.world.entity.Entity target) {
+        // 炮座可能在物理结构上：方块坐标在结构存储区，射线检测要用投影后的世界坐标
+        net.minecraft.world.phys.Vec3 from = net.minecraft.world.phys.Vec3
+                .atCenterOf(com.mcl.cbtc.device.Devices.projectPos(level, arm.getBlockPos()))
+                .add(0.0D, 1.0D, 0.0D);
+        net.minecraft.world.phys.Vec3 to = target.getBoundingBox().getCenter();
+        double distanceSqr = from.distanceToSqr(to);
+        if (distanceSqr > 128.0D * 128.0D) {
+            return false;
+        }
+        net.minecraft.world.phys.BlockHitResult hit = level.clip(new net.minecraft.world.level.ClipContext(
+                from, to, net.minecraft.world.level.ClipContext.Block.COLLIDER,
+                net.minecraft.world.level.ClipContext.Fluid.NONE, (net.minecraft.world.entity.Entity) null));
+        return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS
+                || hit.getLocation().distanceToSqr(from) >= distanceSqr - 1.0D;
     }
 
     /** 火控单位可用弹药：动力臂读弹药箱，智能炮座读炮内炮弹。 */

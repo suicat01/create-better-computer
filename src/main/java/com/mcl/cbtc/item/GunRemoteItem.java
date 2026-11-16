@@ -28,6 +28,11 @@ public class GunRemoteItem extends Item {
         super(properties);
     }
 
+    /** 是否读取整个键盘与鼠标侧键；普通枪式遥控器只读左右键。 */
+    public boolean fullKeyboard() {
+        return false;
+    }
+
     @Override
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
         // 服务端先分配好 ID 再同步给客户端，保证两边拿到的 ID 一致

@@ -167,4 +167,19 @@ final class SubLevelBridge {
         return sub == null ? null : sub.logicalPose().transformPosition(
                 new Vec3(localPos.getX() + 0.5, localPos.getY() + 0.5, localPos.getZ() + 0.5));
     }
+
+    /**
+     * 主世界坐标 → 结构局部（存储区）坐标；结构不存在时原样返回。
+     * <p>
+     * 结构内的方块实体仍以存储区坐标为准，瞄准这类方块时目标点也要换算到同一坐标系，
+     * 算出来的方向才和方块朝向一致。
+     */
+    static Vec3 toLocalSpace(Level level, java.util.UUID subLevelId, Vec3 world) {
+        dev.ryanhcode.sable.api.sublevel.SubLevelContainer container = container(level);
+        if (container == null) {
+            return world;
+        }
+        dev.ryanhcode.sable.sublevel.SubLevel sub = container.getSubLevel(subLevelId);
+        return sub == null ? world : sub.logicalPose().transformPositionInverse(world);
+    }
 }

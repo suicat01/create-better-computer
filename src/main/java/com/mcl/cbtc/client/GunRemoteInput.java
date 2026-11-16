@@ -26,6 +26,8 @@ import org.lwjgl.glfw.GLFW;
 public final class GunRemoteInput {
     private static String remoteId;
     private static InteractionHand hand;
+    /** 当前遥控器是否读取整个键盘与鼠标侧键（全能枪式遥控器）。 */
+    private static boolean fullKeyboard;
     /** Esc 退出使用状态时，短暂屏蔽随之而来的暂停菜单。 */
     private static long pauseSuppressUntil;
 
@@ -47,6 +49,7 @@ public final class GunRemoteInput {
         }
         remoteId = id;
         GunRemoteInput.hand = hand;
+        fullKeyboard = stack.getItem() instanceof GunRemoteItem remote && remote.fullKeyboard();
         PacketDistributor.sendToServer(new GunRemoteStatePayload(id, true));
         showMessage("item.cbtc.gun_remote.enter");
         // 松开原版的"使用"键状态，避免右键按住时继续触发物品使用和挥手动画
@@ -65,6 +68,7 @@ public final class GunRemoteInput {
         }
         remoteId = null;
         hand = null;
+        fullKeyboard = false;
     }
 
     /** 动作栏提示（进入/退出控制模式）。 */
@@ -85,38 +89,66 @@ public final class GunRemoteInput {
             return;
         }
         int button = event.getButton();
-        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+        boolean sideButton = button == GLFW.GLFW_MOUSE_BUTTON_4 || button == GLFW.GLFW_MOUSE_BUTTON_5;
+        if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT && button != GLFW.GLFW_MOUSE_BUTTON_RIGHT
+                && !(fullKeyboard && sideButton)) {
             return;
         }
         boolean down = event.getAction() == GLFW.GLFW_PRESS;
-        if (down) {
-            playClickSound();
-        }
+        playKeySound(down);
         PacketDistributor.sendToServer(new GunRemoteInputPayload(remoteId, button, down));
         // 吞掉这次点击，避免同时打出攻击或触发方块/物品交互
         event.setCanceled(true);
     }
 
-    /** 按下的机械"咔哒"声，纯客户端播放。 */
-    private static void playClickSound() {
+    /** 按下/松开的机械"咔哒"声：优先用与打字机同款的音效。 */
+    private static void playKeySound(boolean down) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.player == null) {
             return;
         }
+        if (com.mcl.cbtc.compat.SimulatedSounds.loaded()) {
+            com.mcl.cbtc.compat.SimulatedSounds.key(minecraft.level,
+                    minecraft.player.blockPosition(), down);
+            return;
+        }
         minecraft.level.playLocalSound(minecraft.player.getX(), minecraft.player.getY(), minecraft.player.getZ(),
                 net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK.value(), net.minecraft.sounds.SoundSource.PLAYERS,
-                0.45F, 1.35F, false);
+                0.45F, down ? 1.35F : 1.1F, false);
     }
 
     @SubscribeEvent
     public static void onKey(InputEvent.Key event) {
-        if (remoteId != null && event.getAction() != GLFW.GLFW_RELEASE
-                && event.getKey() == GLFW.GLFW_KEY_ESCAPE) {
+        if (remoteId == null) {
+            return;
+        }
+        if (event.getAction() != GLFW.GLFW_RELEASE && event.getKey() == GLFW.GLFW_KEY_ESCAPE) {
             // 记下这一下 Esc，接下来一小段时间内不让暂停菜单停留
             pauseSuppressUntil = System.currentTimeMillis() + 500L;
             endSession();
             // 与打字机一致：Esc 直接关掉当前界面，避免连带弹出暂停菜单
             Minecraft.getInstance().setScreen(null);
+            return;
+        }
+        // 全能枪式遥控器：整个键盘都作为按键上报，并按打字机的方式拦掉原版按键动作
+        if (!fullKeyboard || event.getKey() == GLFW.GLFW_KEY_UNKNOWN
+                || event.getAction() == GLFW.GLFW_REPEAT) {
+            return;
+        }
+        boolean down = event.getAction() == GLFW.GLFW_PRESS;
+        preventPress(event.getKey(), event.getScanCode());
+        playKeySound(down);
+        PacketDistributor.sendToServer(new GunRemoteInputPayload(remoteId, event.getKey(), down));
+    }
+
+    /** 与 CB打字机一致：把这次按键对应的原版按键动作吞掉，避免移动、开背包等操作。 */
+    private static void preventPress(int key, int scanCode) {
+        for (net.minecraft.client.KeyMapping mapping : Minecraft.getInstance().options.keyMappings) {
+            if (mapping.matches(key, scanCode)) {
+                mapping.consumeClick();
+                mapping.setDown(false);
+                break;
+            }
         }
     }
 

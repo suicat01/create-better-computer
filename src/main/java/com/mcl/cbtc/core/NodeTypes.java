@@ -267,6 +267,29 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("sentry"), List.of(""));
 
+    /** 清除瞄准组件已锁定的全部目标。 */
+    public static final NodeType SIGHT_LOCK_CLEAR_ALL = add("sight_lock_clear_all", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sight"), List.of(""));
+
+    /** 清除瞄准组件最后一个锁定的目标；没有锁定时什么也不做。 */
+    public static final NodeType SIGHT_LOCK_CLEAR_LAST = add("sight_lock_clear_last", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sight"), List.of(""));
+
+    /**
+     * 火控单位瞄准并击杀瞄准组件锁定的全部目标。
+     * <p>
+     * 一旦启动，火控单位的瞄准与开火由锁定表接管，直到目标全部解决；
+     * 排序方式决定先打哪个：lock=锁定先后，name=名字首字母，health=血量最高优先。
+     */
+    public static final NodeType FIRE_CONTROL_KILL_ALL = add("fire_control_kill_all", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sentry", "sight", "order"), List.of("", "", "lock"));
+
     /**
      * 哨戒动力臂换弹：立即从动力臂的弹药箱里补满当前武器的弹匣。
      * <p>

@@ -57,6 +57,7 @@ public final class CbcRegistries {
                         output.accept(CbcItems.LODESTONE_CHARM.get());
                         output.accept(CbcItems.GUNNER_SIGHT.get());
                         output.accept(CbcItems.GUN_REMOTE.get());
+                        output.accept(CbcItems.ALL_GUN_REMOTE.get());
                         output.accept(CbcItems.BOUND_COMPASS.get());
                         output.accept(CbcItems.MUSIC_MODULE.get());
                         output.accept(CbcItems.GEARBOX_ANGLE_TOOL.get());

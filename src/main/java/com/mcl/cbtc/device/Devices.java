@@ -460,6 +460,23 @@ public final class Devices {
     }
 
     /**
+     * 把主世界坐标换算成该坐标所在物理结构的局部坐标系。
+     * <p>
+     * 物理化后的方块实体仍以结构存储区坐标为准，瞄准这类方块时目标点必须一并换算，
+     * 方向和角度才有意义。坐标不在任何结构里时原样返回。
+     */
+    public static Vec3 toLocalSpace(Level level, BlockPos pos, Vec3 worldPoint) {
+        if (!DeviceAccess.hasSable() || level == null || worldPoint == null) {
+            return worldPoint;
+        }
+        DeviceLocation local = SubLevelBridge.locateLocal(level, pos);
+        if (local == null || local.subLevelId() == null) {
+            return worldPoint;
+        }
+        return SubLevelBridge.toLocalSpace(level, local.subLevelId(), worldPoint);
+    }
+
+    /**
      * 把一条存储定位解析成主世界坐标：
      * 有结构 UUID 就直接投影；UUID 缺失（旧存档只写了结构内坐标）时先按存储区归属，
      * 再按锚点挑最近的子世界；坐标本来就是主世界坐标时直接返回方块中心。

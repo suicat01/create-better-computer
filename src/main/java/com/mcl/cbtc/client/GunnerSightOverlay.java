@@ -2,6 +2,7 @@ package com.mcl.cbtc.client;
 
 import com.mcl.cbtc.compat.Curios;
 import com.mcl.cbtc.compat.CuriosCompat;
+import com.mcl.cbtc.item.GunnerSightItem;
 import com.mcl.cbtc.registry.CbcItems;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
@@ -33,6 +34,8 @@ public final class GunnerSightOverlay {
     private static final int LINE = 1;
     /** 雷达目标的锁定框与箭头颜色：始终鲜红，不参与滤镜。 */
     private static final int TARGET_COLOR = 0xFFFF3B30;
+    /** 已锁定目标的框、名称与血量颜色：鲜绿。 */
+    private static final int LOCKED_COLOR = 0xFF3BD14A;
     /** 「色彩修复」附魔的注册名。 */
     private static final net.minecraft.resources.ResourceLocation COLOR_RESTORE =
             com.mcl.cbtc.CreateBetterComputer.asResource("color_restore");
@@ -72,7 +75,7 @@ public final class GunnerSightOverlay {
             graphics.drawCenteredString(minecraft.font, GunnerSightZoom.describe(),
                     centerX + 1, centerY + 24, 0xDDF2F2F2);
         }
-        drawTargets(graphics, minecraft, width, height);
+        drawTargets(graphics, minecraft, width, height, player);
     }
 
     /**
@@ -80,11 +83,18 @@ public final class GunnerSightOverlay {
      * <p>
      * 两者都在滤镜之后绘制成 HUD，不会被偏灰滤镜压暗。
      */
-    private static void drawTargets(GuiGraphics graphics, Minecraft minecraft, int width, int height) {
+    private static void drawTargets(GuiGraphics graphics, Minecraft minecraft, int width, int height,
+                                    Player player) {
         var targets = GunnerSightTargets.active(minecraft);
         if (targets.isEmpty()) {
             return;
         }
+        ItemStack sight = wornSight(player);
+        String sightId = sight.isEmpty() ? "" : GunnerSightItem.id(sight);
+        java.util.Map<Integer, Integer> locks = sightId.isBlank() || minecraft.level == null
+                ? java.util.Map.of()
+                : GunnerSightLocksClient.locks(sightId,
+                        minecraft.level.dimension().location().toString());
         net.minecraft.client.Camera camera = minecraft.gameRenderer.getMainCamera();
         Vec3 eye = camera.getPosition();
         Vec3 look = toVec(camera.getLookVector());
@@ -118,10 +128,12 @@ public final class GunnerSightOverlay {
                 maxY = Math.max(maxY, screenY);
             }
             boolean onScreen = projectable && maxX > 0.0D && minX < width && maxY > 0.0D && minY < height;
+            Integer seq = locks.get(target.entityId());
+            int color = seq == null ? TARGET_COLOR : LOCKED_COLOR;
             if (onScreen) {
-                drawTargetBox(graphics, minecraft, width, height, target, minX, maxX, minY, maxY);
+                drawTargetBox(graphics, minecraft, width, height, target, minX, maxX, minY, maxY, color, seq);
             } else {
-                drawEdgeArrow(graphics, width, height, target, eye, look, up, left, tanX, tanY);
+                drawEdgeArrow(graphics, width, height, target, eye, look, up, left, tanX, tanY, color);
             }
         }
     }
@@ -129,7 +141,8 @@ public final class GunnerSightOverlay {
     /** 屏幕内的目标方框：纯矩形，线宽随投影尺寸变化（近大远小），右下角标注名称与血量。 */
     private static void drawTargetBox(GuiGraphics graphics, Minecraft minecraft, int width, int height,
                                       GunnerSightTargets.Target target,
-                                      double minX, double maxX, double minY, double maxY) {
+                                      double minX, double maxX, double minY, double maxY,
+                                      int color, Integer seq) {
         int left = (int) Math.max(0.0D, Math.floor(minX));
         int right = (int) Math.min(width - 1.0D, Math.ceil(maxX));
         int top = (int) Math.max(0.0D, Math.floor(minY));
@@ -139,16 +152,17 @@ public final class GunnerSightOverlay {
         }
         // 近大远小：框越大线越粗
         int thickness = Math.max(1, Math.min(4, (int) Math.round(Math.max(right - left, bottom - top) / 120.0D)));
-        graphics.fill(left, top, right, top + thickness, TARGET_COLOR);
-        graphics.fill(left, bottom - thickness, right, bottom, TARGET_COLOR);
-        graphics.fill(left, top, left + thickness, bottom, TARGET_COLOR);
-        graphics.fill(right - thickness, top, right, bottom, TARGET_COLOR);
-        drawTargetLabel(graphics, minecraft, width, height, target, right, bottom);
+        graphics.fill(left, top, right, top + thickness, color);
+        graphics.fill(left, bottom - thickness, right, bottom, color);
+        graphics.fill(left, top, left + thickness, bottom, color);
+        graphics.fill(right - thickness, top, right, bottom, color);
+        drawTargetLabel(graphics, minecraft, width, height, target, right, bottom, color, seq);
     }
 
     /** 框右下角的实体名称与剩余血量。 */
     private static void drawTargetLabel(GuiGraphics graphics, Minecraft minecraft, int width, int height,
-                                        GunnerSightTargets.Target target, int right, int bottom) {
+                                        GunnerSightTargets.Target target, int right, int bottom,
+                                        int color, Integer seq) {
         String label = target.name() == null ? "" : target.name();
         if (target.health() >= 0.0F) {
             String health = String.format(java.util.Locale.ROOT, "%.0f", target.health());
@@ -156,6 +170,9 @@ public final class GunnerSightOverlay {
         }
         if (label.isBlank()) {
             return;
+        }
+        if (seq != null) {
+            label = "#" + seq + " " + label;
         }
         int textWidth = minecraft.font.width(label);
         int textX = Math.max(0, right - textWidth);
@@ -166,13 +183,13 @@ public final class GunnerSightOverlay {
         if (textX + textWidth > width) {
             textX = Math.max(0, width - textWidth);
         }
-        graphics.drawString(minecraft.font, label, textX, textY, TARGET_COLOR, false);
+        graphics.drawString(minecraft.font, label, textX, textY, color, false);
     }
 
     /** 屏幕外的目标：在屏幕边缘画一个指向它的箭头。 */
     private static void drawEdgeArrow(GuiGraphics graphics, int width, int height,
                                       GunnerSightTargets.Target target, Vec3 eye, Vec3 look, Vec3 up, Vec3 left,
-                                      double tanX, double tanY) {
+                                      double tanX, double tanY, int color) {
         Vec3 delta = new Vec3(target.x() - eye.x,
                 target.y() + target.height() * 0.5D - eye.y,
                 target.z() - eye.z);
@@ -191,7 +208,7 @@ public final class GunnerSightOverlay {
                 halfHeight / Math.max(1.0E-4D, Math.abs(dirY)));
         float arrowX = (float) (width / 2.0D + dirX * scale);
         float arrowY = (float) (height / 2.0D - dirY * scale);
-        drawArrow(graphics, arrowX, arrowY, dirX, -dirY, TARGET_COLOR);
+        drawArrow(graphics, arrowX, arrowY, dirX, -dirY, color);
     }
 
     /** 相机方向向量是 JOML 的 Vector3f，转成 Vec3 方便做点乘。 */
@@ -222,7 +239,7 @@ public final class GunnerSightOverlay {
     }
 
     /** 玩家戴着的瞄准组件（头部槽位优先，其次饰品栏）；没戴时返回空栈。 */
-    private static ItemStack wornSight(Player player) {
+    static ItemStack wornSight(Player player) {
         ItemStack head = player.getItemBySlot(EquipmentSlot.HEAD);
         if (head.is(CbcItems.GUNNER_SIGHT.get())) {
             return head;
