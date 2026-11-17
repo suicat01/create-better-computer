@@ -286,7 +286,83 @@ public final class Program {
             maxId = Math.max(maxId, n.id());
         }
         p.nextNodeId = Math.max(tag.getInt("NextId"), maxId + 1);
+        p.migrateLegacySentryAim();
+        p.migrateLegacySignalSwitch();
         return p;
+    }
+
+    /**
+     * 早期「红石开关」是一块积木加 mode 参数，后来拆成了无线 / 线缆两块。
+     * <p>
+     * 老存档里残留的 {@code signal_switch} 类型已经不存在，执行时会报「未知积木类型」并中断，
+     * 所以这里按它的 mode 参数换成对应新积木，并把原有的连线一并搬过去。
+     */
+    private void migrateLegacySignalSwitch() {
+        for (Node node : new ArrayList<>(nodes)) {
+            if (!"signal_switch".equals(node.typeId())) {
+                continue;
+            }
+            // 旧参数顺序：mode、channel、channel2、serial、state；类型已删除，只能按下标读
+            String mode = node.param(0).trim();
+            String state = node.param(4);
+            boolean cable = "cable".equalsIgnoreCase(mode);
+            NodeType type = NodeTypes.byId(cable ? "cable_switch" : "wireless_switch").orElse(null);
+            if (type == null) {
+                continue;
+            }
+            Node replacement = new Node(allocateId(), type, node.x(), node.y());
+            if (cable) {
+                replacement.setParam("serial", node.param(3));
+            } else {
+                replacement.setParam("channel", node.param(1));
+                replacement.setParam("channel2", node.param(2));
+            }
+            replacement.setParam("state", state.isBlank() ? "on" : state);
+            // 原节点的连线整体搬到新节点上
+            java.util.List<Wire> moved = new ArrayList<>();
+            for (Wire wire : wires) {
+                if (wire.fromNode() == node.id()) {
+                    moved.add(new Wire(replacement.id(), wire.fromPort(), wire.toNode(), wire.toPort()));
+                } else if (wire.toNode() == node.id()) {
+                    moved.add(new Wire(wire.fromNode(), wire.fromPort(), replacement.id(), wire.toPort()));
+                }
+            }
+            wires.removeIf(wire -> wire.fromNode() == node.id() || wire.toNode() == node.id());
+            wires.addAll(moved);
+            nodes.remove(node);
+            nodes.add(replacement);
+        }
+    }
+
+    /**
+     * 旧版「火控单位瞄准」把瞄准组件写在积木自己的 {@code sight} 参数里，直接用佩戴者准星。
+     * <p>
+     * 现在瞄准目标改由凹槽里的积木提供，所以把老存档里的组件自动转成一个
+     * 「瞄准组件准星处」子积木接进 {@code target} 口，升级后行为与之前一致。
+     */
+    private void migrateLegacySentryAim() {
+        for (Node node : new ArrayList<>(nodes)) {
+            if (!"sentry_aim".equals(node.typeId())) {
+                continue;
+            }
+            String sight = node.param("sight").trim();
+            if (sight.isEmpty()) {
+                continue;
+            }
+            // 参数清空，避免以后又被当成旧存档重复迁移
+            node.setParam("sight", "");
+            if (!wiresTo(node.id(), "target").isEmpty()) {
+                continue;
+            }
+            NodeType crosshair = NodeTypes.byId("sight_crosshair").orElse(null);
+            if (crosshair == null) {
+                continue;
+            }
+            Node child = new Node(allocateId(), crosshair, node.x() - 96.0F, node.y() + 22.0F);
+            child.setParam("sight", sight);
+            nodes.add(child);
+            connect(child.id(), "value", node.id(), "target");
+        }
     }
 
     /**

@@ -67,6 +67,23 @@ public class CbcClient {
         if (com.mcl.cbtc.compat.Curios.loaded()) {
             com.mcl.cbtc.compat.GunnerSightCurioRenderer.register();
         }
+        // 编程界面是自绘全屏 UI，把 FTB 的侧栏按钮（任务 / 队伍 / 地图）关掉
+        registerFtbSidebarBlacklist();
+    }
+
+    /**
+     * FTB Library 默认会给所有容器界面挂一排侧栏按钮（任务、队伍、地图）。
+     * 这里用它的官方黑名单 API 把 CB 编程界面排除掉；FTB 没装时整段跳过。
+     */
+    private static void registerFtbSidebarBlacklist() {
+        try {
+            Class<?> apiClass = Class.forName("dev.ftb.mods.ftblibrary.api.client.FTBLibraryClientApi");
+            Object api = apiClass.getMethod("get").invoke(null);
+            apiClass.getMethod("addSidebarScreenBlacklist", String[].class)
+                    .invoke(api, (Object) new String[]{ComputerScreen.class.getName()});
+        } catch (Throwable ignored) {
+            // 没装 FTB Library 或版本没有这个 API：保持原样
+        }
     }
 
     @SubscribeEvent

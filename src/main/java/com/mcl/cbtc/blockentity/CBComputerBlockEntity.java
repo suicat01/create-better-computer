@@ -73,13 +73,18 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     /** 按频率对分别记录收到的强度，键是"红物品|蓝物品"。 */
     private final java.util.Map<String, Integer> wirelessReceivedByChannel = new java.util.LinkedHashMap<>();
     private int lastWirelessReceived;
-    private int wirelessSendStrength;
     /** 发信积木执行后保持点亮的刻数：1 刻，松开/停止后下一刻立即熄灭。 */
     private static final long SEND_PULSE_TICKS = 1;
     /** 发信积木最近一次执行的游戏刻：超过脉冲保持时间就熄灭。 */
     private long wirelessSendTick = -1;
     /** 当前是否处于发信状态。 */
     private boolean wirelessSending;
+    /** 本次脉冲发信用到的频率物品，超时熄灭时按它清掉单独强度与自收状态。 */
+    private ItemStack wirelessSendFirst = ItemStack.EMPTY;
+    private ItemStack wirelessSendSecond = ItemStack.EMPTY;
+    /** 上一次记录的订阅/发信内容，用来避免每刻刷日志。 */
+    private String lastWirelessSubscribeLog = "";
+    private String lastWirelessSendLog = "";
 
     /** 线缆发信当前亮着的序列号。 */
     private final java.util.Set<Integer> cableActiveSerials = new java.util.HashSet<>();
@@ -87,6 +92,13 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     private final java.util.Map<Integer, Long> cableSendTick = new java.util.HashMap<>();
     /** 线缆发信写入的拓展器位置。 */
     private net.minecraft.core.BlockPos cableSendPos;
+
+    /** 开关积木：无线红石保持输出的状态与频率；关掉后不再重发。 */
+    private boolean wirelessSwitchOn;
+    private String wirelessSwitchFirst = "";
+    private String wirelessSwitchSecond = "";
+    /** 开关积木：保持输出的线缆序列号集合。 */
+    private final java.util.Set<Integer> cableSwitchOn = new java.util.HashSet<>();
 
     /** 当前已加入的局域网：键是规范化后的局域网 ID；换卡或拔卡时随 tick 同步增删。 */
     private final java.util.Map<String, com.mcl.cbtc.lan.LanBus.LanNetwork> lanNetworks =
@@ -187,6 +199,8 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             // 火控击杀任务独立于积木执行流运行，每刻推进一次
             tickKillJob();
         }
+        // 开关积木：开着的信号每刻重发一次，不会被下面的脉冲超时掐掉
+        tickSignalSwitches();
         // 发信积木"按住才亮"：本刻没再执行就熄灭，关机时也走这里清零
         tickWirelessTransmitter();
         tickCableTransmitter();
@@ -1260,14 +1274,24 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     }
 
     /**
-     * 哨戒动力臂瞄准：让指定动力臂瞄准指定瞄准组件佩戴者的准星。
-     * <p>
-     * 每次执行只刷新一次瞄准点，所以要放进「重复执行」里持续调用；
-     * 动力臂绑定后已进入接管状态，原版自动索敌不会抢回控制权。
+     * 哨戒动力臂瞄准（旧接口）：等价于瞄准「瞄准组件准星处」。
      */
     @Override
     public void sentryAim(String sentryDeviceId, String sightDeviceId) {
-        if (!(level instanceof ServerLevel serverLevel) || !com.mcl.cbtc.device.Devices.hasFireControl()) {
+        sentryAimTarget(sentryDeviceId, com.mcl.cbtc.core.Value.Target.crosshair(sightDeviceId));
+    }
+
+    /**
+     * 火控单位瞄准：目标来自「瞄准目标」凹槽，可能是准星处、水平垂直角度，或准星加角度偏移。
+     * <p>
+     * 每次执行只刷新一次瞄准点，所以要放进「重复执行」里持续调用；
+     * 动力臂绑定后已进入接管状态，原版自动索敌不会抢回控制权。
+     * 方向类目标以火控单位自身为原点换算成瞄准点，炮座与哨戒臂的瞄准接口因此不用区分。
+     */
+    @Override
+    public void sentryAimTarget(String sentryDeviceId, com.mcl.cbtc.core.Value.Target target) {
+        if (!(level instanceof ServerLevel serverLevel) || !com.mcl.cbtc.device.Devices.hasFireControl()
+                || target == null) {
             return;
         }
         // 锁定击杀任务期间，瞄准指令交给任务自己处理
@@ -1276,37 +1300,87 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         }
         java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
         net.minecraft.world.level.block.entity.BlockEntity arm = sentryArm(devices.get(sentryDeviceId));
-        com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
-        if (arm == null || sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+        if (arm == null) {
             return;
         }
-        net.minecraft.server.level.ServerPlayer wearer = findSightWearer(serverLevel, sight.id());
-        if (wearer == null) {
-            return;
+        net.minecraft.world.phys.Vec3 point;
+        if (target.usesSight()) {
+            com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(target.sight());
+            if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+                return;
+            }
+            net.minecraft.server.level.ServerPlayer wearer = findSightWearer(serverLevel, sight.id());
+            if (wearer == null) {
+                return;
+            }
+            point = cbtc$crosshairPoint(wearer);
+            if (target.offset()) {
+                // 偏移按角度叠加：以火控单位为原点把"臂→准星"转一下，距离保持不变
+                point = cbtc$rotateAround(cbtc$armCenter(serverLevel, arm), point,
+                        target.yaw(), target.pitch());
+            }
+        } else {
+            // 只给了角度：从火控单位自身出发，沿方向取远处一点
+            point = cbtc$armCenter(serverLevel, arm)
+                    .add(cbtc$direction(target.yaw(), target.pitch()).scale(256.0D));
         }
-        // 准星落在生物上时瞄准它的包围盒中心；否则退回方块准星落点/视线尽头。
-        // 直接打方块落点会因为动力臂与玩家视角存在视差而大多擦过生物。
-        net.minecraft.world.phys.Vec3 eye = wearer.getEyePosition(1.0F);
-        net.minecraft.world.phys.Vec3 look = wearer.getViewVector(1.0F);
-        double maxDistance = 256.0D;
-        net.minecraft.world.phys.Vec3 reach = look.scale(maxDistance);
-        net.minecraft.world.phys.Vec3 blockPoint = wearer.pick(maxDistance, 1.0F, false).getLocation();
-        double blockDistanceSqr = blockPoint.distanceToSqr(eye);
-        net.minecraft.world.phys.EntityHitResult entityHit =
-                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(wearer,
-                        eye, eye.add(reach),
-                        wearer.getBoundingBox().expandTowards(reach).inflate(1.0D),
-                        entity -> entity != wearer && !entity.isSpectator() && entity.isPickable(),
-                        maxDistance * maxDistance);
-        net.minecraft.world.phys.Vec3 point =
-                entityHit != null && entityHit.getLocation().distanceToSqr(eye) <= blockDistanceSqr
-                        ? entityHit.getEntity().getBoundingBox().getCenter()
-                        : blockPoint;
         if (cbtc$isSmartMount(arm)) {
             com.mcl.cbtc.compat.cbc.CannonMountCompat.aim(arm, point);
         } else if (com.mcl.cbtc.device.Devices.hasSentry()) {
             com.mcl.cbtc.compat.SentryArmCompat.aim(arm, point);
         }
+    }
+
+    /**
+     * 准星处的瞄准点：视线尽头；准星落在生物上时改瞄它的包围盒中心。
+     * <p>
+     * 不做方块射线检测——玻璃、机壳与第三人称镜头后面的方块都不参与判定，
+     * 否则视线一被挡住瞄准点就缩到贴脸那一格，动力臂会直接失去方向。
+     */
+    private static net.minecraft.world.phys.Vec3 cbtc$crosshairPoint(
+            net.minecraft.server.level.ServerPlayer wearer) {
+        net.minecraft.world.phys.Vec3 eye = wearer.getEyePosition(1.0F);
+        net.minecraft.world.phys.Vec3 look = wearer.getViewVector(1.0F);
+        double maxDistance = 256.0D;
+        net.minecraft.world.phys.Vec3 reach = look.scale(maxDistance);
+        net.minecraft.world.phys.Vec3 point = eye.add(reach);
+        net.minecraft.world.phys.EntityHitResult entityHit =
+                net.minecraft.world.entity.projectile.ProjectileUtil.getEntityHitResult(wearer,
+                        eye, point,
+                        wearer.getBoundingBox().expandTowards(reach).inflate(1.0D),
+                        entity -> entity != wearer && !entity.isSpectator() && entity.isPickable(),
+                        maxDistance * maxDistance);
+        return entityHit != null ? entityHit.getEntity().getBoundingBox().getCenter() : point;
+    }
+
+    /** 火控单位在主世界里的中心坐标（物理化后按结构姿态投影）。 */
+    private static net.minecraft.world.phys.Vec3 cbtc$armCenter(ServerLevel level,
+                                                                 net.minecraft.world.level.block.entity.BlockEntity arm) {
+        return net.minecraft.world.phys.Vec3.atCenterOf(
+                com.mcl.cbtc.device.Devices.projectPos(level, arm.getBlockPos()));
+    }
+
+    /** 水平/垂直角度 → 单位方向：正南 0°、向西为正，垂直抬头为正。 */
+    private static net.minecraft.world.phys.Vec3 cbtc$direction(double yawDegrees, double pitchDegrees) {
+        double yaw = Math.toRadians(yawDegrees);
+        double pitch = Math.toRadians(pitchDegrees);
+        return new net.minecraft.world.phys.Vec3(-Math.sin(yaw) * Math.cos(pitch),
+                Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+    }
+
+    /** 把"原点→点"的方向按水平/垂直角度转一下，保持距离不变。 */
+    private static net.minecraft.world.phys.Vec3 cbtc$rotateAround(net.minecraft.world.phys.Vec3 origin,
+                                                                   net.minecraft.world.phys.Vec3 point,
+                                                                   double yawOffset, double pitchOffset) {
+        net.minecraft.world.phys.Vec3 dir = point.subtract(origin);
+        double length = dir.length();
+        if (length < 1.0E-6D) {
+            return point;
+        }
+        double yaw = Math.toDegrees(Math.atan2(-dir.x, dir.z)) + yawOffset;
+        double horizontal = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+        double pitch = Math.toDegrees(Math.atan2(dir.y, horizontal)) + pitchOffset;
+        return origin.add(cbtc$direction(yaw, Math.max(-90.0D, Math.min(90.0D, pitch))).scale(length));
     }
 
     /** 哨戒动力臂射击：每执行一次模拟一次扳机，点射/连发节奏交给枪械自身。 */
@@ -1832,10 +1906,13 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     }
 
     public void onWirelessRedstoneReceived(String channelKey, int strength) {
-        if (strength <= 0) {
-            wirelessReceivedByChannel.remove(channelKey);
-        } else {
+        Integer previous = wirelessReceivedByChannel.remove(channelKey);
+        if (strength > 0) {
             wirelessReceivedByChannel.put(channelKey, strength);
+        }
+        // 只在强度真正变化时记一行，方便对照游戏里的接线是否正确
+        if (previous == null ? strength > 0 : previous != strength) {
+            CreateBetterComputer.LOGGER.info("[{}] 无线接收 {} = {}", name, channelKey, strength);
         }
         // wirelessReceived 保留"所有频道里最强的那个"，供旧的单频道积木使用
         int max = 0;
@@ -1853,13 +1930,13 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
     private void updateWirelessChannels() {
         if (!hasWirelessRedstoneModule()) {
             link.setFrequencies(ItemStack.EMPTY, ItemStack.EMPTY);
+            if (!lastWirelessSubscribeLog.isEmpty()) {
+                lastWirelessSubscribeLog = "";
+                CreateBetterComputer.LOGGER.info("[{}] 未检测到无线红石模块，已停止无线频道订阅", name);
+            }
             return;
         }
-        // 发信积木每刻执行一次，正在发信时不覆盖频率，否则会把刚选定的频道冲掉
-        if (wirelessSending) {
-            return;
-        }
-        // 把所有接收类积木的频道都订阅上，这样不同条件积木可以各用一组频道
+        // 接收与发信的频道一起常驻订阅，这样"一边发信一边接收"时不会互相顶掉
         List<ItemStack[]> pairs = new ArrayList<>();
         for (String type : List.of("redstone_receive", "redstone_receive_compare",
                 "redstone_received", "redstone_received_compare")) {
@@ -1869,18 +1946,48 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                         wirelessItem(node.param("channel2"))});
             }
         }
-        if (!pairs.isEmpty()) {
-            link.setChannelPairs(pairs);
+        for (Node node : program.nodesOfType("redstone_send")) {
+            pairs.add(new ItemStack[]{
+                    wirelessItem(node.param("channel")),
+                    wirelessItem(node.param("channel2"))});
+        }
+        // 开关正在保持的频率也要一直订阅
+        if (wirelessSwitchOn) {
+            pairs.add(new ItemStack[]{
+                    wirelessItem(wirelessSwitchFirst), wirelessItem(wirelessSwitchSecond)});
+        }
+        if (pairs.isEmpty()) {
+            link.setFrequencies(ItemStack.EMPTY, ItemStack.EMPTY);
+            if (!lastWirelessSubscribeLog.isEmpty()) {
+                lastWirelessSubscribeLog = "";
+                CreateBetterComputer.LOGGER.info("[{}] 程序里没有无线频道，已停止订阅", name);
+            }
             return;
         }
-        for (Node node : program.nodesOfType("redstone_send")) {
-            setWirelessFrequencies(node.param("channel"), node.param("channel2"));
-            return;
+        link.setChannelPairs(pairs);
+        // 订阅内容变化时记一行，方便确认程序里的频道有没有真的被订阅上
+        StringBuilder signature = new StringBuilder();
+        for (ItemStack[] pair : pairs) {
+            if (signature.length() > 0) {
+                signature.append("、");
+            }
+            signature.append(wirelessKey(pair[0], pair[1]));
+        }
+        String text = signature.toString();
+        if (!text.equals(lastWirelessSubscribeLog)) {
+            lastWirelessSubscribeLog = text;
+            CreateBetterComputer.LOGGER.info("[{}] 无线频道订阅：{}", name, text);
         }
     }
 
-    private void setWirelessFrequencies(String first, String second) {
-        link.setFrequencies(wirelessItem(first), wirelessItem(second));
+    /** 与 LinkEndpoint 保持一致的频率对键："红物品|蓝物品"。 */
+    private static String wirelessKey(ItemStack first, ItemStack second) {
+        return first.getItem() + "|" + second.getItem();
+    }
+
+    /** 两组频率是不是同一对物品。 */
+    private static boolean sameFrequency(ItemStack first, ItemStack other) {
+        return first.getItem() == other.getItem();
     }
 
     /** 把积木里的物品 ID 字符串转成频率物品；空串按红石粉处理。 */
@@ -1895,17 +2002,32 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
      * <p>
      * 只负责"点亮"：信号在执行的这一 tick 有效，下一 tick 如果没有再执行同一条积木，
      * 由 {@link #tickWirelessTransmitter()} 熄灭。也就是按下亮、松开灭。
+     * <p>
+     * 频道表由 {@link #updateWirelessChannels()} 常驻订阅，这里只改这一组频率的强度，
+     * 不会把正在接收的频道顶掉。另外 Create 的网络计算功率时会跳过发起者本人
+     * （{@code updateNetworkOf} 里的 {@code member == actor}），所以这里自己补一份接收状态，
+     * 否则"自己发自己收"永远收不到。
      */
     @Override
     public void sendWirelessRedstone(String first, String second, int strength) {
         if (!hasWirelessRedstoneModule()) {
             return;
         }
-        setWirelessFrequencies(first, second);
-        wirelessSendStrength = Math.max(0, Math.min(15, strength));
+        ItemStack redItem = wirelessItem(first);
+        ItemStack blueItem = wirelessItem(second);
+        int value = Math.max(0, Math.min(15, strength));
+        wirelessSendFirst = redItem;
+        wirelessSendSecond = blueItem;
         wirelessSendTick = level == null ? 0 : level.getGameTime();
         wirelessSending = true;
-        link.setStrength(wirelessSendStrength);
+        link.setKeyStrength(redItem, blueItem, value);
+        onWirelessRedstoneReceived(wirelessKey(redItem, blueItem), value);
+        String log = wirelessKey(redItem, blueItem) + "=" + value;
+        if (!log.equals(lastWirelessSendLog)) {
+            lastWirelessSendLog = log;
+            CreateBetterComputer.LOGGER.info("[{}] 无线发信 {} 强度 {}", name,
+                    wirelessKey(redItem, blueItem), value);
+        }
     }
 
     /** 每刻收尾：超过最短脉冲时长仍没有再执行发信积木就熄灭。 */
@@ -1915,7 +2037,19 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         }
         if (level.getGameTime() - wirelessSendTick >= SEND_PULSE_TICKS) {
             wirelessSending = false;
-            link.setStrength(0);
+            lastWirelessSendLog = "";
+            ItemStack redItem = wirelessSendFirst;
+            ItemStack blueItem = wirelessSendSecond;
+            wirelessSendFirst = ItemStack.EMPTY;
+            wirelessSendSecond = ItemStack.EMPTY;
+            // 开关正持有同一组频率时保留强度，否则这次脉冲的发送与自收状态一起清掉
+            boolean heldBySwitch = wirelessSwitchOn
+                    && sameFrequency(redItem, wirelessItem(wirelessSwitchFirst))
+                    && sameFrequency(blueItem, wirelessItem(wirelessSwitchSecond));
+            if (!heldBySwitch) {
+                link.clearKeyStrength(redItem, blueItem);
+                onWirelessRedstoneReceived(wirelessKey(redItem, blueItem), 0);
+            }
         }
     }
 
@@ -1959,6 +2093,10 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
                 continue;
             }
             int channel = entry.getKey();
+            // 开关持有时这根序列号由开关负责，不吃脉冲超时，避免每刻闪一下
+            if (cableSwitchOn.contains(channel)) {
+                continue;
+            }
             if (cableSendPos != null) {
                 com.mcl.cbtc.compat.cable.CableCompat.setSignal(level, cableSendPos, channel, 0);
             }
@@ -1976,6 +2114,109 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         }
         cableActiveSerials.clear();
         cableSendTick.clear();
+    }
+
+    // ---------------------------------------------------------------- 红石开关
+
+    /**
+     * 无线红石开关：记住这组频率想要的通断状态。
+     * <p>
+     * 打开时只给这组频率单独指定强度 15（不影响其它频率的发送），
+     * 并在 {@link #updateWirelessChannels()} 里保持订阅，所以不会像一次性发信那样一刻就灭。
+     */
+    @Override
+    public void setWirelessRedstoneSwitch(String first, String second, boolean on) {
+        if (!hasWirelessRedstoneModule()) {
+            return;
+        }
+        wirelessSwitchOn = on;
+        wirelessSwitchFirst = first == null ? "" : first;
+        wirelessSwitchSecond = second == null ? "" : second;
+        if (on) {
+            link.setKeyStrength(wirelessItem(wirelessSwitchFirst), wirelessItem(wirelessSwitchSecond), 15);
+            // 同样自己补一份接收状态，让"自己发自己收"成立
+            onWirelessRedstoneReceived(wirelessKey(wirelessItem(wirelessSwitchFirst),
+                    wirelessItem(wirelessSwitchSecond)), 15);
+            // 立刻把新频率订阅上，避免要等到下一 tick 才开始发信
+            updateWirelessChannels();
+        } else {
+            link.clearKeyStrength(wirelessItem(wirelessSwitchFirst), wirelessItem(wirelessSwitchSecond));
+            onWirelessRedstoneReceived(wirelessKey(wirelessItem(wirelessSwitchFirst),
+                    wirelessItem(wirelessSwitchSecond)), 0);
+            updateWirelessChannels();
+        }
+    }
+
+    /** 线缆开关：记住某根序列号想要的通断状态；关掉时立即写回 0。 */
+    @Override
+    public void setCableSignalSwitch(int serial, boolean on) {
+        ExpanderBlockEntity expander = attachedExpander();
+        if (level == null || level.isClientSide || expander == null || !expander.hasCableModule()) {
+            return;
+        }
+        int channel = Math.max(1, Math.min(com.mcl.cbtc.compat.cable.CableCompat.CHANNELS, serial));
+        if (on) {
+            cableSwitchOn.add(channel);
+            sendCableSignal(channel, 15);
+            return;
+        }
+        cableSwitchOn.remove(channel);
+        cableSendTick.remove(channel);
+        cableActiveSerials.remove(channel);
+        com.mcl.cbtc.compat.cable.CableCompat.setSignal(level, expander.getBlockPos(), channel, 0);
+    }
+
+    /**
+     * 开关积木每刻重发一次保持中的信号。
+     * <p>
+     * 关机、拔掉模块时把开关全部清零，避免电脑不运行时还在对外输出。
+     */
+    private void tickSignalSwitches() {
+        if (level == null || level.isClientSide) {
+            return;
+        }
+        if (!powered) {
+            if (wirelessSwitchOn) {
+                link.clearKeyStrength(wirelessItem(wirelessSwitchFirst), wirelessItem(wirelessSwitchSecond));
+            }
+            if (!cableSwitchOn.isEmpty()) {
+                ExpanderBlockEntity expander = attachedExpander();
+                if (expander != null) {
+                    for (int channel : cableSwitchOn) {
+                        com.mcl.cbtc.compat.cable.CableCompat.setSignal(
+                                level, expander.getBlockPos(), channel, 0);
+                    }
+                }
+            }
+            clearSignalSwitches();
+            return;
+        }
+        if (wirelessSwitchOn && hasWirelessRedstoneModule()) {
+            // 频率每次重新订阅后（例如被一次性发信挤掉）都保持这个单独强度与自收状态
+            ItemStack redItem = wirelessItem(wirelessSwitchFirst);
+            ItemStack blueItem = wirelessItem(wirelessSwitchSecond);
+            link.setKeyStrength(redItem, blueItem, 15);
+            onWirelessRedstoneReceived(wirelessKey(redItem, blueItem), 15);
+        }
+        if (!cableSwitchOn.isEmpty()) {
+            for (int channel : cableSwitchOn) {
+                sendCableSignal(channel, 15);
+            }
+        }
+    }
+
+    /** 电脑关机或模块被拔掉时清空开关状态（不发信，只清记录）。 */
+    private void clearSignalSwitches() {
+        if (wirelessSwitchOn) {
+            ItemStack redItem = wirelessItem(wirelessSwitchFirst);
+            ItemStack blueItem = wirelessItem(wirelessSwitchSecond);
+            link.clearKeyStrength(redItem, blueItem);
+            onWirelessRedstoneReceived(wirelessKey(redItem, blueItem), 0);
+        }
+        wirelessSwitchOn = false;
+        wirelessSwitchFirst = "";
+        wirelessSwitchSecond = "";
+        cableSwitchOn.clear();
     }
 
     // ---------------------------------------------------------------- 频率 / 组
@@ -2113,10 +2354,20 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             wirelessReceivedByChannel.clear();
             lastWirelessReceived = 0;
             link.setStrength(0);
+            // 拔掉无线模块后，开关保持的那组频率也一并失效
+            if (wirelessSwitchOn) {
+                link.clearKeyStrength(wirelessItem(wirelessSwitchFirst), wirelessItem(wirelessSwitchSecond));
+                wirelessSwitchOn = false;
+                wirelessSwitchFirst = "";
+                wirelessSwitchSecond = "";
+            }
         }
         // 拔掉线缆模块卡后，正在进行的线缆发信要立刻停下并清零
         if (!hasCableModule() && !cableSendTick.isEmpty()) {
             stopCableSignal();
+        }
+        if (!hasCableModule()) {
+            cableSwitchOn.clear();
         }
         updateWirelessChannels();
         link.refreshNetwork();
@@ -2275,6 +2526,12 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             lines.add(net.minecraft.nbt.StringTag.valueOf(line));
         }
         tag.put("Display", lines);
+
+        // 开关状态：区块重载后依然保持原来的通断
+        tag.putBoolean("WireSwitch", wirelessSwitchOn);
+        tag.putString("WireSwitch1", wirelessSwitchFirst);
+        tag.putString("WireSwitch2", wirelessSwitchSecond);
+        tag.putIntArray("CableSwitch", cableSwitchOn.stream().mapToInt(Integer::intValue).toArray());
     }
 
     @Override
@@ -2291,6 +2548,15 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         ListTag lines = tag.getList("Display", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < DISPLAY_LINES; i++) {
             displayLines[i] = i < lines.size() ? lines.getString(i) : "";
+        }
+
+        // 开关状态：重新加载后由 tickSignalSwitches 继续重发
+        wirelessSwitchOn = tag.getBoolean("WireSwitch");
+        wirelessSwitchFirst = tag.getString("WireSwitch1");
+        wirelessSwitchSecond = tag.getString("WireSwitch2");
+        cableSwitchOn.clear();
+        for (int serial : tag.getIntArray("CableSwitch")) {
+            cableSwitchOn.add(serial);
         }
     }
 

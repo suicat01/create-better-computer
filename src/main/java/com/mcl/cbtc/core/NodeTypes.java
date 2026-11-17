@@ -46,7 +46,12 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)), List.of(), List.of());
 
-    /** 如果 条件：条件成立时执行空腔里的积木。 */
+    /**
+     * 如果 条件：条件成立时执行空腔里的积木。
+     * <p>
+     * 没有接「done」后续积木时，它会在原地每刻重新判断条件，相当于自带每刻循环检查；
+     * 接了「done」则按普通顺序执行。
+     */
     public static final NodeType IF = add("if", NodeCategory.CONTROL,
             List.of(new NodeType.Port("exec", PortKind.FLOW), new NodeType.Port("cond", PortKind.BOOL)),
             List.of(new NodeType.Port("then", PortKind.FLOW), new NodeType.Port("done", PortKind.FLOW)),
@@ -260,12 +265,44 @@ public final class NodeTypes {
             List.of("radar", "sight"), List.of("", ""));
 
     /**
-     * 哨戒动力臂瞄准：让动力臂瞄准指定瞄准组件佩戴者的准星。
+     * 瞄准目标：瞄准组件佩戴者的准星处。
      * <p>
-     * 每次执行都刷新一次瞄准点，放进「重复执行」里就能跟着佩戴者的视线持续转动。
+     * 只有"瞄准目标"凹槽能嵌入它，输出交给「火控单位瞄准」。
+     */
+    public static final NodeType SIGHT_CROSSHAIR = add("sight_crosshair", NodeCategory.AERO,
+            List.of(), List.of(new NodeType.Port("value", PortKind.TARGET)),
+            List.of("sight"), List.of(""));
+
+    /**
+     * 瞄准目标：直接写水平/垂直角度。
+     * <p>
+     * 水平与 MC 朝向同一套（正南 0°、向西为正，-180~180），垂直抬头为正（-90~90）；
+     * 方向以火控单位自身为原点换算成瞄准点。两个角度槽都可填可嵌。
+     */
+    public static final NodeType AIM_ANGLES = add("aim_angles", NodeCategory.AERO,
+            List.of(new NodeType.Port("h", PortKind.NUMBER), new NodeType.Port("v", PortKind.NUMBER)),
+            List.of(new NodeType.Port("value", PortKind.TARGET)),
+            List.of("h", "v"), List.of("0", "0"));
+
+    /**
+     * 瞄准目标：准星处再叠加水平/垂直角度偏移。
+     * <p>
+     * 先把准星处换算成从火控单位出发的方向，再按角度相加，所以偏移后仍然指向准星附近。
+     */
+    public static final NodeType AIM_OFFSET = add("aim_offset", NodeCategory.AERO,
+            List.of(new NodeType.Port("h", PortKind.NUMBER), new NodeType.Port("v", PortKind.NUMBER)),
+            List.of(new NodeType.Port("value", PortKind.TARGET)),
+            List.of("sight", "h", "v"), List.of("", "0", "0"));
+
+    /**
+     * 火控单位瞄准：让动力臂/智能炮座朝「瞄准目标」凹槽里嵌的目标指。
+     * <p>
+     * 每次执行都刷新一次瞄准点，放进「重复执行」里就能持续跟随。
+     * {@code sight} 是旧版积木的遗留参数：老存档载入时会自动转成一个
+     * 「瞄准组件准星处」子积木，所以这里保留但不再使用。
      */
     public static final NodeType SENTRY_AIM = add("sentry_aim", NodeCategory.AERO,
-            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW), new NodeType.Port("target", PortKind.TARGET)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("sentry", "sight"), List.of("", ""));
 
@@ -790,6 +827,28 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("serial", "strength"),
             List.of("1", "15"));
+
+    /**
+     * 无线红石开关：把一组无线频率持续置为开/关。
+     * <p>
+     * 与「发送频道信号」不同，它不是一次性脉冲：执行一次后电脑会一直保持这组频率的通断，
+     * 直到同一条积木把它关掉（或电脑关机）。
+     */
+    public static final NodeType WIRELESS_SWITCH = add("wireless_switch", NodeCategory.REDSTONE,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("channel", "channel2", "state"),
+            List.of("minecraft:redstone", "minecraft:redstone", "on"));
+
+    /**
+     * 线缆开关：把一根线缆序列号持续置为开/关。
+     * <p>
+     * 与「发送线缆信号」的一次性脉冲区分开，执行一次后由电脑每刻保持。
+     */
+    public static final NodeType CABLE_SWITCH = add("cable_switch", NodeCategory.REDSTONE,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("serial", "state"), List.of("1", "on"));
 
     // ---------------------------------------------------------------- 局域网模块
 

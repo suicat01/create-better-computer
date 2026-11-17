@@ -734,6 +734,28 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             finishHeader(n, layout, depth);
             return;
         }
+        if ("wireless_switch".equals(type.id())) {
+            // 与「发送频道信号」同一套措辞：频道 #1（红）… 频道 #2（蓝）… 设为 [开/关]
+            cursor = addText(layout.headerItems, cursor,
+                    Component.translatable("cbtc.redstone.frequency1").getString());
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("channel"));
+            cursor = addText(layout.headerItems, cursor,
+                    Component.translatable("cbtc.redstone.frequency2").getString());
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("channel2"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.signal_switch_set"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("state"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("cable_switch".equals(type.id())) {
+            // 与「发送线缆信号」同一套措辞：序列号 [1] 设为 [开/关]
+            cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.param.serial").getString());
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("serial"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.signal_switch_set"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("state"));
+            finishHeader(n, layout, depth);
+            return;
+        }
         if (isWirelessRedstoneType(type)) {
             cursor = addText(layout.headerItems, cursor, Component.translatable("cbtc.redstone.frequency1").getString());
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("channel"));
@@ -1033,12 +1055,39 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             return;
         }
         if ("sentry_aim".equals(type.id())) {
-            // 让 [哨戒动力臂] 瞄准 [瞄准组件] 佩戴者的准星
+            // 让 [火控单位] 瞄准 ⟨瞄准目标凹槽⟩
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_head"));
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_mid"));
+            addSlot(n, layout.headerItems, cursor, "target", depth + 1);
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("sight_crosshair".equals(type.id())) {
+            // [瞄准组件] 的准星处
+            addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("aim_angles".equals(type.id())) {
+            // 水平 ⟨角度⟩° 垂直 ⟨角度⟩°
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_h"));
+            cursor = addSlot(n, layout.headerItems, cursor, "h", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_v"));
+            cursor = addSlot(n, layout.headerItems, cursor, "v", depth + 1);
+            addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("aim_offset".equals(type.id())) {
+            // [瞄准组件] 的准星处 偏移 水平 ⟨角度⟩° 垂直 ⟨角度⟩°
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
-            addText(layout.headerItems, cursor, tr("cbtc.gui.sentry_aim_tail"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_offset_mid"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_h"));
+            cursor = addSlot(n, layout.headerItems, cursor, "h", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_v"));
+            cursor = addSlot(n, layout.headerItems, cursor, "v", depth + 1);
+            addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
             finishHeader(n, layout, depth);
             return;
         }
@@ -1827,6 +1876,12 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 default -> tr("cbtc.gui.mode_continuous");
             };
         }
+        // 两块红石开关的"开/关"存英文键，界面上显示中文
+        if (("wireless_switch".equals(n.typeId()) || "cable_switch".equals(n.typeId()))
+                && "state".equals(t.params().get(index))) {
+            return "off".equalsIgnoreCase(stored) ? tr("cbtc.gui.signal_state_off")
+                    : tr("cbtc.gui.signal_state_on");
+        }
         // 火控击杀的排序方式存英文键，界面上显示中文
         if ("order".equals(t.params().get(index)) && "fire_control_kill_all".equals(n.typeId())) {
             return lockOrderLabel(stored);
@@ -2206,6 +2261,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "sentry_aim".equals(type.id()) || "sentry_fire".equals(type.id())
                 || "sentry_reload".equals(type.id())
                 || "sentry_ammo".equals(type.id()) || "sentry_magazine".equals(type.id())
+                || "sight_crosshair".equals(type.id()) || "aim_offset".equals(type.id())
                 || "sight_lock_clear_all".equals(type.id()) || "sight_lock_clear_last".equals(type.id())
                 || "fire_control_kill_all".equals(type.id()) || "sight_angle".equals(type.id())
                 || "sight_line_angle".equals(type.id());
@@ -2270,7 +2326,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         for (NodeCategory cat : NodeCategory.values()) {
             List<NodeType> types = new ArrayList<>();
             for (NodeType t : NodeTypes.all()) {
-                if (t.category() == cat && (!isLogisticsType(t) || storageModuleInstalled)
+                // 两块红石开关各自依赖对应的模块卡
+                boolean switchUsable = switch (t.id()) {
+                    case "wireless_switch" -> wirelessRedstoneModuleInstalled;
+                    case "cable_switch" -> cableModuleInstalled
+                            && com.mcl.cbtc.compat.cable.CableCompat.loaded();
+                    default -> true;
+                };
+                if (t.category() == cat && switchUsable
+                        && (!isLogisticsType(t) || storageModuleInstalled)
                         && (!isWirelessRedstoneType(t) || wirelessRedstoneModuleInstalled)
                         && (!isCableType(t) || cableModuleInstalled
                         && com.mcl.cbtc.compat.cable.CableCompat.loaded())
@@ -3251,6 +3315,16 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // 频道选择器的搜索框：先吃掉键盘输入，否则会被画布快捷键和拖拽逻辑抢走
+        if (itemSearchBox != null && itemSearchBox.isFocused()) {
+            if (keyCode == 256) { // Esc：关掉选择器
+                closeItemPicker();
+                return true;
+            }
+            itemSearchBox.keyPressed(keyCode, scanCode, modifiers);
+            itemPickerScroll = 0;
+            return true;
+        }
         // 按键拾取：进入监听后按下的任意键直接绑定为该积木的按键
         if (keyCaptureNode != null) {
             if (keyCode == 256) { // Esc：放弃拾取，不改原值
@@ -3364,6 +3438,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        if (itemSearchBox != null && itemSearchBox.isFocused()) {
+            return itemSearchBox.charTyped(codePoint, modifiers);
+        }
         if (nameBox != null && nameBox.isFocused()) {
             return nameBox.charTyped(codePoint, modifiers);
         }
@@ -4024,7 +4101,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if (n.type() == null) {
             return false;
         }
-        if (isWirelessRedstoneType(n.type())) {
+        // 红石开关的频率参数与无线红石积木一样，存的是物品 ID
+        if (isWirelessRedstoneType(n.type()) || "wireless_switch".equals(n.typeId())) {
             return index == n.type().paramIndex("channel") || index == n.type().paramIndex("channel2");
         }
         return ("warehouse_item_count".equals(n.typeId()) || "packager_send".equals(n.typeId()))
@@ -4047,7 +4125,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         itemPickerIndex = index;
         itemPickerScroll = 0;
         itemSearch = "";
-        if (isWirelessRedstoneType(n.type())) {
+        if (isWirelessRedstoneType(n.type()) || "wireless_switch".equals(n.typeId())) {
             itemSearchBox = new EditBox(font, 0, 0, 100, 14, Component.translatable("cbtc.gui.channel_search"));
             itemSearchBox.setMaxLength(64);
             itemSearchBox.setHint(Component.translatable("cbtc.gui.channel_search"));
@@ -4077,7 +4155,8 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
     }
 
     private List<net.minecraft.world.item.ItemStack> pickerItems() {
-        if (itemPickerNode == null || !isWirelessRedstoneType(itemPickerNode.type())) {
+        if (itemPickerNode == null || (!isWirelessRedstoneType(itemPickerNode.type())
+                && !"wireless_switch".equals(itemPickerNode.typeId()))) {
             return warehouseItems.stream().map(entry -> entry.stack).toList();
         }
         String search = itemSearch.trim().toLowerCase(java.util.Locale.ROOT);
@@ -4086,11 +4165,51 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             net.minecraft.world.item.ItemStack stack = item.getDefaultInstance();
             String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item).toString();
             if (search.isEmpty() || id.toLowerCase(java.util.Locale.ROOT).contains(search)
-                    || stack.getHoverName().getString().toLowerCase(java.util.Locale.ROOT).contains(search)) {
+                    || stack.getHoverName().getString().toLowerCase(java.util.Locale.ROOT).contains(search)
+                    || pinyinContains(stack.getHoverName().getString(), search)) {
                 result.add(stack);
             }
         }
         return result;
+    }
+
+    /** 拼音匹配用的反射方法；装了 Just Enough Characters 才有值。 */
+    private static java.lang.reflect.Method pinyinContainsMethod;
+    private static boolean pinyinContainsChecked;
+
+    /**
+     * 拼音搜索：装了 Just Enough Characters 时借用它的 PinIn 匹配器，
+     * 输入 "hsf" 或 "hongshifen" 也能匹配「红石粉」；没装时返回 false。
+     */
+    private static boolean pinyinContains(String text, String query) {
+        if (!pinyinContainsChecked) {
+            pinyinContainsChecked = true;
+            if (net.neoforged.fml.ModList.get().isLoaded("jecharacters")) {
+                try {
+                    Class<?> match = Class.forName("me.towdium.jecharacters.utils.Match");
+                    // 按名字找双参 contains(String, CharSequence)，签名变动时也不会静默失效
+                    for (java.lang.reflect.Method method : match.getMethods()) {
+                        if ("contains".equals(method.getName()) && method.getParameterCount() == 2
+                                && method.getParameterTypes()[0] == String.class) {
+                            pinyinContainsMethod = method;
+                            break;
+                        }
+                    }
+                } catch (Throwable ignored) {
+                    pinyinContainsMethod = null;
+                }
+            }
+        }
+        if (pinyinContainsMethod == null) {
+            return false;
+        }
+        try {
+            return (Boolean) pinyinContainsMethod.invoke(null, text, query);
+        } catch (Throwable ignored) {
+            // 缺少拼音词典等异常时退回普通搜索，不影响界面
+            pinyinContainsMethod = null;
+            return false;
+        }
     }
 
     private void renderItemPicker(GuiGraphics g, int mouseX, int mouseY) {
@@ -4269,6 +4388,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                     tr("cbtc.gui.lock_order_lock"),
                     tr("cbtc.gui.lock_order_name"),
                     tr("cbtc.gui.lock_order_health")};
+        }
+        if ("signal_state".equals(menuKind(node, index))) {
+            return new String[]{tr("cbtc.gui.signal_state_on"), tr("cbtc.gui.signal_state_off")};
         }
         if ("info_device".equals(menuKind(node, index))) {
             java.util.List<String> names = new java.util.ArrayList<>();
@@ -4524,6 +4646,9 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("lock_order".equals(menuKind(node, index))) {
             return LOCK_ORDERS[optionIndex];
         }
+        if ("signal_state".equals(menuKind(node, index))) {
+            return optionIndex == 1 ? "off" : "on";
+        }
         if ("locator_device".equals(menuKind(node, index))) {
             java.util.List<com.mcl.cbtc.network.DeviceListPayload.Entry> candidates = new java.util.ArrayList<>();
             for (var device : peripheralDevices) {
@@ -4606,6 +4731,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if ("order".equals(key) && "fire_control_kill_all".equals(node.typeId())) {
             return "lock_order";
+        }
+        if (("wireless_switch".equals(node.typeId()) || "cable_switch".equals(node.typeId()))
+                && "state".equals(key)) {
+            return "signal_state";
         }
         if (!"device".equals(key)) {
             return "";
@@ -4816,6 +4945,14 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         // 火控击杀的排序方式：三项固定候选
         if ("lock_order".equals(menuKind(n, index))) {
+            commitParamEdit();
+            deviceMenuNode = n;
+            deviceMenuIndex = index;
+            deviceMenuScroll = 0;
+            return;
+        }
+        // 红石开关：开/关是固定候选
+        if ("signal_state".equals(menuKind(n, index))) {
             commitParamEdit();
             deviceMenuNode = n;
             deviceMenuIndex = index;

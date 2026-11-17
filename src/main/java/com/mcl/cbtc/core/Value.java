@@ -5,9 +5,10 @@ import net.minecraft.nbt.Tag;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 积木程序里流动的值。当前有数值、布尔、文本、数列四种，都统一收敛成 double / boolean / String 便于比较。
+ * 积木程序里流动的值。数值、布尔、文本、数列、时间与瞄准目标都在这里定义，
+ * 前四种统一收敛成 double / boolean / String 便于比较。
  */
-public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Seq, Value.Time {
+public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Seq, Value.Time, Value.Target {
     Value ZERO = new Num(0);
 
     static Value of(double v) {
@@ -40,6 +41,8 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             case 2 -> new Str(tag.getString("V"));
             case 3 -> new Seq(readSeq(tag));
             case 4 -> new Time(tag.getLong("G"), tag.getLong("R"), tag.getString("U"));
+            case 5 -> new Target(tag.contains("S", Tag.TAG_STRING) ? tag.getString("S") : null,
+                    tag.getBoolean("R"), tag.getDouble("Y"), tag.getDouble("P"));
             default -> new Num(tag.getDouble("V"), false, tag.getString("U"));
         };
     }
@@ -243,6 +246,64 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             if (unit != null && !unit.isEmpty()) {
                 tag.putString("U", unit);
             }
+        }
+    }
+
+    /**
+     * 瞄准目标：既可以是"某块瞄准组件佩戴者的准星处"，也可以是直接用水平/垂直角度指方向。
+     * <p>
+     * 水平角与 MC 朝向同一套：正南 0°，向西为正，正东 -90°，正北 ±180°；垂直角抬头为正。
+     * {@code offset} 为真表示在准星方向的基础上再叠加这两个角度。
+     */
+    record Target(@Nullable String sight, boolean offset, double yaw, double pitch) implements Value {
+        /** 瞄准组件佩戴者的准星处。 */
+        public static Target crosshair(String sight) {
+            return new Target(sight, false, 0.0D, 0.0D);
+        }
+
+        /** 直接用水平/垂直角度指方向。 */
+        public static Target angles(double yaw, double pitch) {
+            return new Target(null, false, yaw, pitch);
+        }
+
+        /** 准星处再叠加角度偏移。 */
+        public static Target crosshairOffset(String sight, double yaw, double pitch) {
+            return new Target(sight, true, yaw, pitch);
+        }
+
+        /** 是否以准星处为基准；否则只看角度。 */
+        public boolean usesSight() {
+            return sight != null && !sight.isBlank();
+        }
+
+        @Override
+        public double asNumber() {
+            return 0;
+        }
+
+        @Override
+        public boolean asBool() {
+            return true;
+        }
+
+        @Override
+        public String asText() {
+            if (!usesSight()) {
+                return "水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°";
+            }
+            String base = "准星 " + sight;
+            return offset ? base + " 水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°" : base;
+        }
+
+        @Override
+        public void save(CompoundTag tag) {
+            tag.putByte("T", (byte) 5);
+            if (sight != null) {
+                tag.putString("S", sight);
+            }
+            tag.putBoolean("R", offset);
+            tag.putDouble("Y", yaw);
+            tag.putDouble("P", pitch);
         }
     }
 

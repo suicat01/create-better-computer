@@ -140,8 +140,28 @@ public interface MachineHost {
     default void sentryAim(String sentryDeviceId, String sightDeviceId) {
     }
 
+    /**
+     * 让火控单位瞄准一个「瞄准目标」：准星处、水平垂直角度，或准星加角度偏移。
+     * <p>
+     * 同样每次执行只刷新一次，方向类目标以火控单位自身为原点换算成瞄准点。
+     */
+    default void sentryAimTarget(String sentryDeviceId, Value.Target target) {
+    }
+
     /** 让哨戒动力臂扣动一次扳机：每执行一次模拟一次扳机，连发节奏交给枪械自身。 */
     default void sentryFire(String sentryDeviceId) {
+    }
+
+    /**
+     * 无线红石开关：把一组频率持续置为开/关。
+     * <p>
+     * 与一次性发信不同，开状态会每刻重发，直到同一条积木把它关掉。
+     */
+    default void setWirelessRedstoneSwitch(String first, String second, boolean on) {
+    }
+
+    /** 线缆开关：把指定序列号持续置为开/关；关掉时立即把该序列号写回 0。 */
+    default void setCableSignalSwitch(int serial, boolean on) {
     }
 
     /** 让哨戒动力臂立即换弹；弹匣已满或没有匹配弹药时什么也不做。 */

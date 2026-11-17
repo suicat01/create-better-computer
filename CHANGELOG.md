@@ -1,5 +1,77 @@
 # 更新日志
 
+## 1.1.2.2-beta
+
+> 测试版（Beta）：建议先在备份存档中验证后再用于正式存档。
+> 改进：瞄准积木改成「瞄准目标」凹槽、新增无线红石 / 线缆开关、C 型积木恢复每刻重判。
+
+### 新增
+
+- **瞄准目标凹槽**：「火控单位瞄准」不再自带准星开关，改为一个「瞄准目标」端口，可嵌入三种瞄准目标积木：
+  - **准星处**：取瞄准组件佩戴者的准星位置，隔玻璃、隔方块都不再丢目标，第三人称同样跟随；
+  - **水平垂直角度**：直接写角度（水平正南 0°、向西为正，±180°；垂直抬头为正，±90°），两槽可填可嵌，空槽按 0°；
+  - **准星偏移角度**：在准星位置基础上叠加水平 / 垂直偏移，适合做提前量或固定偏置。
+- **无线红石开关 / 线缆开关**：把一组频道或一个线缆序列号**持续**置为开 / 关，执行一次后由电脑每刻保持，直到同一条积木关掉或关机；与一次性的「发送频道信号 / 发送线缆信号」区分开。
+- **频道选择器搜索框**：红石频道选择器顶部可输入物品 ID 或名称过滤；装了 Just Enough Characters 时支持拼音（`hsf`、`hongshifen` 都能搜到「红石粉」）。
+
+### 修复
+
+- **隔墙无法瞄准**：旧逻辑会对方块做射线检测，隔着玻璃或方块时拿不到准星点；现在直接取准星位置，不再受方块阻挡。
+- **自己发的无线红石收不到**：Create 6 的 `updateNetworkOf` 会跳过发信方自身，本机订阅的接收端因此收不到自己发的信号；现在发信后由电脑自己补一次接收。
+- **发送顶掉接收频道**：发信与接收共用频道时互相覆盖；现在按每个频道（红蓝频率对）分别记录强度，发信不再取消接收订阅。
+- **事件积木开 / 关各触发一次**：「当收到频道信号」原本信号熄灭也会触发；现在没有强度条件的事件只响应有信号的上升沿，带强度条件的仍可判断 `强度 <= 0` 检测断开。
+- **C 型积木只跑一次**：「如果…那么 / 如果…否则」接在入口后跑完就结束；现在没接 `done` 时会在原地每刻重判，分支跑完也回到条件积木，可以反复使用。
+- **旧存档积木变成未知类型**：旧版 `signal_switch` 载入时自动拆成「无线红石开关 / 线缆开关」并搬移连线。
+- **FTB 侧栏按钮压在编程界面上**：装了 FTB 任务 / 地图 / 队伍时，把编程界面加入 FTB Library 侧栏黑名单。
+- **材料区重名**：「如果…否则」「当收到广播」「收到广播（条件）」与其他积木重名，已改成互不相同的名字。
+
+### 措辞统一
+
+- 全部「频率」改为「频道」，角度轴统一为「垂直」；无线红石仍严格遵循 #1 红 / #2 蓝。
+
+### 兼容性
+
+- 旧存档的瞄准积木自动迁移成「火控单位瞄准 + 准星处」，旧 `signal_switch` 自动拆分。
+- 参数与存档结构未变，可直接覆盖升级。
+
+---
+
+## 1.1.2.2-beta (English)
+
+> Beta release: please validate in a backed-up world before using it on a main save.
+> Changes: aiming is now driven by an "aim target" socket, wireless redstone / cable switch blocks were added, and C-shaped blocks re-evaluate every tick again.
+
+### Added
+
+- **Aim target socket**: "Fire control aim" no longer carries its own crosshair toggle. It exposes a single "aim target" port that accepts three target blocks:
+  - **Crosshair**: uses the sighting component wearer's crosshair position; it no longer loses the target through glass or blocks and works in third person as well;
+  - **Yaw / pitch angles**: write angles directly (yaw follows Minecraft, south = 0°, west positive, ±180°; pitch positive up, ±90°). Both sockets accept typed numbers or blocks, empty means 0°;
+  - **Crosshair offset angles**: adds a yaw / pitch offset on top of the crosshair position, handy for lead or a fixed bias.
+- **Wireless redstone switch / cable switch**: hold a channel pair or a cable serial **continuously** on or off. Execute once and the computer keeps it until the same block turns it off or the computer shuts down, distinct from the one-shot "send channel signal / send cable signal".
+- **Channel picker search**: the wireless channel picker has a search box for item IDs or names, with pinyin support when Just Enough Characters is installed (`hsf` and `hongshifen` both find Redstone Dust).
+
+### Fixed
+
+- **Aiming blocked by walls**: the old path ray-traced blocks and found no crosshair point behind glass or blocks; it now reads the crosshair position directly.
+- **Not receiving your own wireless redstone**: Create 6's `updateNetworkOf` skips the sender, so a locally subscribed receiver never saw its own signal; the computer now mirrors the send into its own receive path.
+- **Sending cancelling the receive channel**: sending and receiving on the same channel overwrote each other; strengths are now tracked per frequency pair, so sending no longer drops the receive subscription.
+- **Event blocks firing on both edges**: "when a channel signal is received" used to fire on signal loss too; blocks without a strength condition now only fire on the rising edge, while strength-conditioned ones can still test `strength <= 0`.
+- **C-shaped blocks running only once**: "if / if-else" ended after a single pass; without a `done` connection they now re-evaluate in place every tick, including after a branch finishes, so they can be reused.
+- **Legacy blocks becoming unknown types**: old `signal_switch` blocks are converted into "wireless redstone switch / cable switch" on load, with their wires moved over.
+- **FTB sidebar buttons covering the programming screen**: the screen is now registered in FTB Library's sidebar blacklist.
+- **Duplicate names in the palette**: "if-else", "when broadcast received" and "broadcast received (condition)" no longer share names with other blocks.
+
+### Wording
+
+- All player-facing "frequency" wording is now "channel", and angle axes are consistently "vertical"; wireless redstone still follows the native #1 red / #2 blue rule.
+
+### Compatibility
+
+- Existing aim blocks migrate to "fire control aim + crosshair", and legacy `signal_switch` blocks are split automatically.
+- No parameter or save-format changes; drop-in upgrade.
+
+---
+
 ## 1.1.2.1-beta
 
 > 测试版（Beta）：建议先在备份存档中验证后再用于正式存档。

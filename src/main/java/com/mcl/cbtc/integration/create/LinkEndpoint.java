@@ -31,6 +31,8 @@ public final class LinkEndpoint {
     private final Map<String, Channel> channels = new LinkedHashMap<>();
     /** 发送用的强度，所有发送频道共用。 */
     private int strength;
+    /** 开关积木按频率对单独指定的强度；没有指定时回落到全局 strength。 */
+    private final Map<String, Integer> keyStrengths = new LinkedHashMap<>();
 
     public LinkEndpoint(Supplier<Level> levelRef, BlockPos pos) {
         this(levelRef, pos, true);
@@ -123,6 +125,35 @@ public final class LinkEndpoint {
         refreshNetwork();
     }
 
+    /**
+     * 让某一组频率单独以指定强度发信（红石开关用），不影响其它频率的发送强度。
+     * <p>
+     * 开关没打开时用 {@link #clearKeyStrength} 取消，强度就回落到全局 strength。
+     */
+    public void setKeyStrength(@Nullable ItemStack first, @Nullable ItemStack second, int value) {
+        String key = pairKey(first, second);
+        int clamped = Math.max(0, Math.min(15, value));
+        Integer previous = keyStrengths.put(key, clamped);
+        if (previous == null || previous != clamped) {
+            refreshNetwork();
+        }
+    }
+
+    /** 取消某组频率的单独发送强度，回到全局 strength。 */
+    public void clearKeyStrength(@Nullable ItemStack first, @Nullable ItemStack second) {
+        if (keyStrengths.remove(pairKey(first, second)) != null) {
+            refreshNetwork();
+        }
+    }
+
+    /** 频率对的去重键：与 {@link #keyKey(Couple)} 使用同一套拼法。 */
+    private static String pairKey(@Nullable ItemStack first, @Nullable ItemStack second) {
+        Couple<RedstoneLinkNetworkHandler.Frequency> key = Couple.create(
+                RedstoneLinkNetworkHandler.Frequency.of(first == null ? ItemStack.EMPTY : first),
+                RedstoneLinkNetworkHandler.Frequency.of(second == null ? ItemStack.EMPTY : second));
+        return keyKey(key);
+    }
+
     /** 加入网络（区块加载/放置时调用）。 */
     public void join() {
         for (Channel channel : channels.values()) {
@@ -149,6 +180,7 @@ public final class LinkEndpoint {
             channel.leave();
         }
         channels.clear();
+        keyStrengths.clear();
         this.strength = 0;
     }
 
@@ -220,7 +252,11 @@ public final class LinkEndpoint {
 
         @Override
         public int getTransmittedStrength() {
-            return level() != null && level().isClientSide ? 0 : strength;
+            if (level() != null && level().isClientSide) {
+                return 0;
+            }
+            // 开关单独指定的强度优先，其余频率沿用全局强度
+            return keyStrengths.getOrDefault(keyKey(key), strength);
         }
 
         @Override

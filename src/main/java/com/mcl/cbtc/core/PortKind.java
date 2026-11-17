@@ -18,6 +18,8 @@ public enum PortKind {
     TIME,
     /** 数列（一串数值），显示成"数，数，数" */
     SEQ,
+    /** 瞄准目标（准星处 / 水平垂直角度），只有瞄准目标类积木能产出 */
+    TARGET,
     /** 任意值，赋值时会做隐式转换 */
     ANY;
 
@@ -48,6 +50,10 @@ public enum PortKind {
         // 以及数值槽（比较时逐项判断，有一项满足即成立）
         if (this == SEQ || other == SEQ) {
             return this == SEQ ? other == SEQ : this == TEXT || this == NUMBER;
+        }
+        // 瞄准目标槽只收瞄准目标积木，瞄准目标也不能当数字/文本用
+        if (this == TARGET || other == TARGET) {
+            return this == TARGET && other == TARGET;
         }
         return this == other || (this == TEXT && other == NUMBER);
     }

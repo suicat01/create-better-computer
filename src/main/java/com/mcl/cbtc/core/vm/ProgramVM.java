@@ -568,10 +568,15 @@ public final class ProgramVM {
         wirelessInbox.clear();
         for (WirelessSignal signal : batch) {
             int strength = signal.strength();
-            for (Node node : program.nodesOfType("redstone_receive")) {
-                Flow flow = new Flow();
-                flow.enter(program, node.id(), "exec");
-                flows.add(flow);
+            // 「当接收到频道信号」没有强度条件，只算"有信号"的那次；
+            // 熄灭（0）不触发，否则开、关会各触发一次。
+            // 带强度条件的积木照常交给它自己的条件判断（例如「强度 <= 0」可以检测断开）。
+            if (strength > 0) {
+                for (Node node : program.nodesOfType("redstone_receive")) {
+                    Flow flow = new Flow();
+                    flow.enter(program, node.id(), "exec");
+                    flows.add(flow);
+                }
             }
             for (Node node : program.nodesOfType("redstone_receive_compare")) {
                 if (!compare(node.param("op"), strength, numberOrParam(node, "strength")).asBool()) {
@@ -713,8 +718,18 @@ public final class ProgramVM {
                 return null;
             }
             case "if" -> {
-                // 标准「如果」：执行到这里时只判断一次，不自带循环
-                return eval(node, "cond", EVAL_DEPTH).asBool() ? "then" : "done";
+                if (eval(node, "cond", EVAL_DEPTH).asBool()) {
+                    return "then";
+                }
+                // 不在循环里、也没接「done」后续积木时，留在原地每刻重新判断条件：
+                // 否则「当此电脑运行时 → 如果 收到信号 → …」这种一次性程序会直接结束执行流，
+                // 之后信号再来也永远不会再判断（表现为积木"完全没反应"）
+                if (flow.loopStack.isEmpty() && program.wireFrom(node.id(), "done").isEmpty()) {
+                    flow.waitTicks = 1;
+                    flow.waitsForCondition = true;
+                    return null;
+                }
+                return "done";
             }
             case "typewriter_key", "when" -> {
                 // 由 tick 扫描事件后直接进入 exec
@@ -955,8 +970,9 @@ public final class ProgramVM {
                 return "exec";
             }
             case "sentry_aim" -> {
-                // 每次都刷新瞄准点；动力臂在绑定后就已由电脑接管，不会再自动索敌
-                host.sentryAim(node.param("sentry"), node.param("sight"));
+                // 瞄准目标由凹槽里的积木提供，每执行一次刷新一次；
+                // 槽位空着时按 0°/0°（正南、不俯仰）处理
+                host.sentryAimTarget(node.param("sentry"), aimTargetOf(eval(node, "target", EVAL_DEPTH)));
                 return "exec";
             }
             case "sentry_fire" -> {
@@ -1054,12 +1070,25 @@ public final class ProgramVM {
             }
             case "redstone_send" -> {
                 host.sendWirelessRedstone(node.param("channel"), node.param("channel2"),
-                        (int) Math.max(0, Math.min(15, numberOrParam(node, "strength"))));
+                        strengthOf(node, "strength", 15));
                 return "exec";
             }
             case "cable_send" -> {
                 host.sendCableSignal((int) Math.max(1, Math.min(64, numberOrParam(node, "serial"))),
-                        (int) Math.max(0, Math.min(15, numberOrParam(node, "strength"))));
+                        strengthOf(node, "strength", 15));
+                return "exec";
+            }
+            case "wireless_switch" -> {
+                // 无线开关：执行一次写入状态，之后由电脑持续保持
+                host.setWirelessRedstoneSwitch(node.param("channel"), node.param("channel2"),
+                        !"off".equalsIgnoreCase(node.param("state").trim()));
+                return "exec";
+            }
+            case "cable_switch" -> {
+                // 线缆开关：同上，按序列号保持
+                host.setCableSignalSwitch(
+                        (int) Math.max(1, Math.min(64, numberOrParam(node, "serial"))),
+                        !"off".equalsIgnoreCase(node.param("state").trim()));
                 return "exec";
             }
             case "bc_send" -> {
@@ -1289,6 +1318,14 @@ public final class ProgramVM {
                     Math.abs(host.speedControllerSpeed(source.param("device"))));
             case "sentry_ammo" -> Value.of(host.sentryReserveAmmo(source.param("sentry")));
             case "sentry_magazine" -> Value.of(host.sentryMagazineAmmo(source.param("sentry")));
+            // 瞄准目标：三种积木都只产出"要指哪"，真正的瞄准点在服务端换算
+            case "sight_crosshair" -> Value.Target.crosshair(source.param("sight").trim());
+            case "aim_angles" -> Value.Target.angles(
+                    wrapAngle(numberOrParam(source, "h")),
+                    clampPitch(numberOrParam(source, "v")));
+            case "aim_offset" -> Value.Target.crosshairOffset(source.param("sight").trim(),
+                    wrapAngle(numberOrParam(source, "h")),
+                    clampPitch(numberOrParam(source, "v")));
             // 佩戴者朝向：水平按 MC 朝向（正南 0°），上下按俯仰角（抬头为正），都是度数
             case "sight_angle" -> new Value.Num(host.sightAngle(source.param("sight"),
                     source.param("axis")), false, "°");
@@ -1626,6 +1663,22 @@ public final class ProgramVM {
             return eval(node, port, EVAL_DEPTH).asNumber();
         }
         return parseDouble(node.param(port));
+    }
+
+    /**
+     * 红石强度槽：接线的按嵌入积木求值；没接线时读参数。
+     * <p>
+     * 旧存档里这个参数可能是 {@code blink} 之类的模式名（其它版本的红石发信积木），
+     * 直接按数字解析会变成 0，表现为"发了但没强度"，所以非数字一律按默认强度处理。
+     */
+    private int strengthOf(Node node, String port, int fallback) {
+        if (program.wiresTo(node.id(), port).isEmpty()) {
+            String text = node.param(port).trim();
+            if (text.isEmpty() || !text.matches("-?\\d+(\\.\\d+)?")) {
+                return fallback;
+            }
+        }
+        return (int) Math.max(0, Math.min(15, numberOrParam(node, port)));
     }
 
     private String textOrParam(Node node, String port) {
@@ -1983,6 +2036,16 @@ public final class ProgramVM {
         return value;
     }
 
+    /** 垂直瞄准角：抬头为正，夹在 -90 ~ 90。 */
+    private static double clampPitch(double degrees) {
+        return Math.max(-90.0D, Math.min(90.0D, degrees));
+    }
+
+    /** 凹槽里的值转成瞄准目标；空槽（或嵌了别的积木）时按 0°/0° 处理。 */
+    private static Value.Target aimTargetOf(Value value) {
+        return value instanceof Value.Target target ? target : Value.Target.angles(0, 0);
+    }
+
     /** 角度四则运算；乘除也要归一，所以结果一律再过一次 wrapAngle。 */
     private static double angleMath(String op, double a, double b) {
         double result = switch (op) {
@@ -2081,7 +2144,16 @@ public final class ProgramVM {
                             this.nextNode = doneWire.get().toNode();
                             return;
                         }
-                        // done 没接线：从 if 积木继续向上找外层循环，不能停在 done 上
+                        // done 没接线、又不在循环里：回到条件积木身上每刻重判，
+                        // 这样「如果」「如果否则」可以反复使用，而不是跑一次就整段结束
+                        if (loopStack.isEmpty()) {
+                            this.resumeAfterWait = false;
+                            this.waitsForCondition = true;
+                            this.waitTicks = 2;
+                            this.nextNode = owner.id();
+                            return;
+                        }
+                        // 在循环里：从 if 积木继续向上找外层循环，不能停在 done 上
                         cursor = owner.id();
                         continue;
                     }
