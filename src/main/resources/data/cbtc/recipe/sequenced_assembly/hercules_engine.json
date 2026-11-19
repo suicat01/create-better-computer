@@ -1,0 +1,135 @@
+{
+  "type": "create:sequenced_assembly",
+  "ingredient": {
+    "item": "create:industrial_iron_block"
+  },
+  "loops": 9,
+  "transitional_item": {
+    "id": "create:industrial_iron_block"
+  },
+  "sequence": [
+    {
+      "type": "create:pressing",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "create:large_cogwheel"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "create:cogwheel"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "create:steam_engine"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "cbtc:super_blaze_rod"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "minecraft:netherite_ingot"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    },
+    {
+      "type": "create:deploying",
+      "ingredients": [
+        {
+          "item": "create:industrial_iron_block"
+        },
+        {
+          "item": "create:mechanical_press"
+        }
+      ],
+      "results": [
+        {
+          "id": "create:industrial_iron_block"
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "chance": 60.0,
+      "id": "cbtc:hercules_engine"
+    },
+    {
+      "chance": 20.0,
+      "id": "create:industrial_iron_block"
+    },
+    {
+      "chance": 20.0,
+      "id": "minecraft:netherite_block"
+    }
+  ]
+}

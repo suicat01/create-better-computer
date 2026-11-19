@@ -40,6 +40,7 @@ public final class CbcPonderScenes {
     public static final ResourceLocation COMPUTER_TAG = CreateBetterComputer.asResource("computer");
     public static final ResourceLocation SCULPTING_HAND_TAG = CreateBetterComputer.asResource("sculpting_hand");
     public static final ResourceLocation SUPER_BLAZE_TAG = CreateBetterComputer.asResource("super_blaze");
+    public static final ResourceLocation SERGEANT_TAG = CreateBetterComputer.asResource("sergeant");
 
     /** 九种讲解石变种，共用同一个思索场景。 */
     public static final List<ResourceLocation> LECTURE_STONES = List.of(
@@ -115,6 +116,9 @@ public final class CbcPonderScenes {
                 CbcPonderScenes::targetLocator, COMPUTER_TAG);
         helper.addStoryBoard(CreateBetterComputer.asResource("lodestone_charm"), "lodestone_charm",
                 CbcPonderScenes::lodestoneCharm, COMPUTER_TAG);
+        // 瓦列里中士：可编程火炮装填臂
+        helper.addStoryBoard(CreateBetterComputer.asResource("sergeant_valery"), "sergeant_valery",
+                CbcPonderScenes::sergeantValery, SERGEANT_TAG);
         // 超级烈焰人的转换：烈焰蛋糕喂烈焰人 / 喂烈焰人刷怪笼
         helper.forComponents(java.util.List.of(CreateBetterComputer.asResource("super_blaze_spawn_egg"),
                         net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", "blaze_cake")))
@@ -191,6 +195,14 @@ public final class CbcPonderScenes {
         helper.addToTag(SUPER_BLAZE_TAG)
                 .add(CreateBetterComputer.asResource("super_blaze_spawn_egg"))
                 .add(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("create", "blaze_cake"));
+        helper.registerTag(SERGEANT_TAG)
+                .title("Sergeant Valery")
+                .description("A mechanical arm built for loading cannons")
+                .item(CbcBlocks.SERGEANT_VALERY.get().asItem())
+                .addToIndex()
+                .register();
+        helper.addToTag(SERGEANT_TAG)
+                .add(CreateBetterComputer.asResource("sergeant_valery"));
     }
 
     /** 智能炮座：CBC 火炮底座复刻，无传动轴，红石组装开火，可被电脑瞄准。 */
@@ -264,6 +276,71 @@ public final class CbcPonderScenes {
                 .placeNearTarget()
                 .attachKeyFrame();
         scene.idle(90);
+        scene.markAsFinished();
+    }
+
+    /** 瓦列里中士：可编程火炮装填臂。 */
+    private static void sergeantValery(SceneBuilder scene, SceneBuildingUtil util) {
+        scene.title("sergeant_valery", "Sergeant Valery");
+        scene.configureBasePlate(0, 0, 5);
+        scene.scaleSceneView(0.9F);
+        scene.showBasePlate();
+        scene.idle(10);
+        BlockPos arm = util.grid().at(2, 1, 2);
+        Vec3 armTop = util.vector().topOf(arm);
+        scene.world().setBlock(arm, CbcBlocks.SERGEANT_VALERY.get().defaultBlockState(), true);
+        scene.world().showSection(util.select().position(arm), Direction.DOWN);
+        scene.idle(15);
+
+        scene.overlay().showText(80)
+                .text("A mechanical arm rebuilt for one job: loading cannons, fast and powerful")
+                .pointAt(armTop)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+
+        scene.overlay().showControls(armTop.add(0, 0.4, 0), Pointing.DOWN, 40)
+                .rightClick()
+                .withItem(new ItemStack(CbcItems.SERGEANT_VALERY.get()));
+        scene.overlay().showText(80)
+                .text("Right-click a cannon mount with it to bind that mount as the loading target")
+                .colored(PonderPalette.BLUE)
+                .pointAt(armTop)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+
+        scene.overlay().showText(80)
+                .text("Right-click the placed arm to write a five-row loading program")
+                .colored(PonderPalette.GREEN)
+                .pointAt(armTop)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+
+        scene.overlay().showText(80)
+                .text("It pulls the shells and powder charges from the container directly below it")
+                .colored(PonderPalette.BLUE)
+                .pointAt(util.vector().blockSurface(arm.below(), Direction.UP))
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+
+        scene.overlay().showText(80)
+                .text("Only cannons with a quickfiring breech can be loaded; the round goes in the moment the arm reaches the mount")
+                .colored(PonderPalette.GREEN)
+                .pointAt(armTop)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(90);
+
+        scene.overlay().showText(100)
+                .text("Valery can still do an ordinary mechanical arm's job if you want - but is his huge stress cost really worth it?")
+                .colored(PonderPalette.RED)
+                .pointAt(armTop)
+                .placeNearTarget()
+                .attachKeyFrame();
+        scene.idle(110);
         scene.markAsFinished();
     }
 

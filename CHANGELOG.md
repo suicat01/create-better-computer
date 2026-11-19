@@ -1,5 +1,55 @@
 # 更新日志
 
+## 1.1.3
+
+> 正式版：新增瓦列里中士、大力神引擎与相关合成，并补齐智能炮座系列与动力臂的联动。
+
+### 新增
+
+- **瓦列里中士**：可编程火炮装填动力臂，外观、传动与动画一比一复刻机械动力动力臂。
+  - 右键打开五行指令界面，每行可设为「填充」或「留空」，留空即终止序列；
+  - 填充物品种类自动读取 CBC 的弹药与发射药标签（含发射药包、药筒）；
+  - 沿用动力臂的交互点绑定：手持中士右键火炮底座选点，放下方块即绑定，蹲下 + 扳手可重绑；
+  - 从中士正下方容器取弹，只对装有速射炮闩的火炮装填；
+  - 支持连续装填多段发射药，上限为炮管物理容量；
+  - 炮闩开合动画与音效随手臂动作同步，弹药在关闩的一瞬间进膛；
+  - 可同时绑定多门火炮，遵循动力臂的分配方法：优先第一个 / 轮流 / 强制轮流；
+  - 应力影响为 256x RPM，物品提示、护目镜、思索动画与 7 种语言全部就绪。
+- **大力神引擎**：序列组装新产物。工业铁块 → 辊压 → 安装大齿轮 → 安装小齿轮 → 安装蒸汽引擎 → 安装超级烈焰棒 → 安装下界合金锭 → 安装辊压机，重复 9 次；产出概率 60% 大力神引擎、20% 工业铁块、20% 下界合金块。
+- **瓦列里中士工作台配方**：有序合成，安山合金 ×3 + 下界合金锭 ×1 + 大力神引擎 ×1 + 工业铁块 ×1。
+
+### 兼容与联动
+
+- 智能炮座、智能固定炮座现在可以被原版动力臂与瓦列里中士识别为装填目标。
+- 智能炮座系列支持漏斗、管道等物品传输方式输入弹药。
+
+---
+
+## 1.1.3 (English)
+
+> Release: adds Sergeant Valery, the Hercules Engine, their recipes, and full Mechanical Arm integration for the smart cannon mounts.
+
+### Added
+
+- **Sergeant Valery**: a programmable cannon-loading arm that faithfully recreates the Create Mechanical Arm in appearance, kinetics and animation.
+  - Right-click to open a five-row program UI: each row can be set to "Fill" or "Blank"; a blank row terminates the sequence;
+  - Filler items are read directly from CBC's projectile and propellant tags (including powder charges and cartridges);
+  - Uses the Mechanical Arm's interaction-point binding: right-click a cannon mount while holding it to select the point, then place the block to bind; crouch + wrench to rebind;
+  - Pulls ammo from the container directly beneath it, and only loads cannons fitted with a quick-firing breech;
+  - Supports loading multiple propellant charges up to the physical capacity of the barrel;
+  - Breech open/close animation and sounds are synced with the arm's motion; ammunition enters at the instant the breech closes;
+  - Multiple cannon mounts can be bound at once and are served following Create's distribution modes: Prefer First / Round Robin / Forced Round Robin;
+  - Stress impact is 256x RPM, with item tooltip, goggles overlay, ponder scene and 7 languages included.
+- **Hercules Engine**: a new Sequenced Assembly product. Industrial Iron Block → Pressing → Deploy Large Cogwheel → Deploy Cogwheel → Deploy Steam Engine → Deploy Super Blaze Rod → Deploy Netherite Ingot → Deploy Mechanical Press, looped 9 times; results are 60% Hercules Engine, 20% Industrial Iron Block and 20% Netherite Block.
+- **Sergeant Valery crafting recipe**: shaped crafting with 3× Andesite Alloy, 1× Netherite Ingot, 1× Hercules Engine and 1× Industrial Iron Block.
+
+### Compatibility & Integration
+
+- Smart Cannon Mount and Smart Fixed Cannon Mount are now recognized as loading targets by both the vanilla Mechanical Arm and Sergeant Valery.
+- Smart Cannon Mounts now accept ammo from hoppers and other item transport.
+
+---
+
 ## 1.1.2.2-beta
 
 > 测试版（Beta）：建议先在备份存档中验证后再用于正式存档。

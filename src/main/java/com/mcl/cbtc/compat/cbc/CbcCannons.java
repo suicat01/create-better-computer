@@ -69,6 +69,22 @@ public final class CbcCannons {
 
         SMART_CANNON_MOUNT_ITEM = CbcItems.ITEMS.registerSimpleBlockItem(SMART_CANNON_MOUNT);
         SMART_FIXED_CANNON_MOUNT_ITEM = CbcItems.ITEMS.registerSimpleBlockItem(SMART_FIXED_CANNON_MOUNT);
+
+        // 智能炮座沿用 CBC 的弹药物品栏：漏斗等物流方式可以直接往炮座里塞弹药
+        bus.addListener(CbcCannons::registerCapabilities);
+    }
+
+    /**
+     * CBC 只给自家的两个炮座方块实体注册了 {@code ItemHandler.BLOCK} 能力，
+     * 智能炮座是另外的方块实体类型，需要把同一套处理器补注册一遍。
+     */
+    private static void registerCapabilities(net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent event) {
+        event.registerBlockEntity(net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
+                SMART_CANNON_MOUNT_BE.get(),
+                (be, side) -> be.getItemHandler(side));
+        event.registerBlockEntity(net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK,
+                SMART_FIXED_CANNON_MOUNT_BE.get(),
+                (be, side) -> be.getItemHandler(side));
     }
 
     /** 方块属性和 CBC 的火炮底座保持一致。 */

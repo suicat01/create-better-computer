@@ -31,6 +31,10 @@ public final class CbcItems {
     public static final DeferredItem<BlockItem> DIAGRAM_SENSOR =
             ITEMS.registerSimpleBlockItem(CbcBlocks.DIAGRAM_SENSOR);
 
+    public static final DeferredItem<com.mcl.cbtc.block.SergeantValeryItem> SERGEANT_VALERY =
+            ITEMS.register("sergeant_valery", () -> new com.mcl.cbtc.block.SergeantValeryItem(
+                    CbcBlocks.SERGEANT_VALERY.get(), new Item.Properties()));
+
     public static final DeferredItem<BlockItem> ORIGINAL_GEARSHIFT =
             ITEMS.registerSimpleBlockItem(CbcBlocks.ORIGINAL_GEARSHIFT);
 
@@ -181,6 +185,10 @@ public final class CbcItems {
 
     public static final DeferredItem<Item> SHULKER_CHIP =
             ITEMS.register("shulker_chip", () -> new Item(new Item.Properties()));
+
+    /** 大力神引擎：序列组装的高阶产物。 */
+    public static final DeferredItem<Item> HERCULES_ENGINE =
+            ITEMS.register("hercules_engine", () -> new Item(new Item.Properties()));
 
     public static final DeferredItem<net.minecraft.world.item.SpawnEggItem> SUPER_BLAZE_SPAWN_EGG =
             ITEMS.register("super_blaze_spawn_egg", () -> new net.minecraft.world.item.SpawnEggItem(

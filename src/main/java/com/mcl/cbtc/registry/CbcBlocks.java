@@ -132,6 +132,16 @@ public final class CbcBlocks {
                             .requiresCorrectToolForDrops()
                             .noOcclusion()));
 
+    /** 瓦列里中士：原版动力臂的等身静态复刻，纯装饰。 */
+    public static final DeferredBlock<com.mcl.cbtc.block.SergeantValeryBlock> SERGEANT_VALERY =
+            BLOCKS.register("sergeant_valery",
+                    () -> new com.mcl.cbtc.block.SergeantValeryBlock(BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.METAL)
+                            .strength(3.0F, 6.0F)
+                            .sound(SoundType.METAL)
+                            .requiresCorrectToolForDrops()
+                            .noOcclusion()));
+
     private static DeferredBlock<com.mcl.cbtc.block.LectureStoneBlock> lectureStoneVariant(String id) {
         return BLOCKS.register(id,
                 () -> new com.mcl.cbtc.block.LectureStoneBlock(BlockBehaviour.Properties.of()

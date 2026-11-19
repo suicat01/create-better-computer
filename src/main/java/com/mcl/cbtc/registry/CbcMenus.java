@@ -27,6 +27,9 @@ public final class CbcMenus {
             MENUS.register("music_module",
                     () -> IMenuTypeExtension.create(com.mcl.cbtc.menu.MusicModuleMenu::new));
 
+    public static final DeferredHolder<MenuType<?>, MenuType<com.mcl.cbtc.menu.SergeantMenu>> SERGEANT_VALERY =
+            MENUS.register("sergeant_valery", () -> IMenuTypeExtension.create(com.mcl.cbtc.menu.SergeantMenu::new));
+
     private CbcMenus() {
     }
 

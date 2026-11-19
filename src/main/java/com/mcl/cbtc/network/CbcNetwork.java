@@ -33,8 +33,25 @@ public final class CbcNetwork {
                         computer.setComputerName(payload.computerName());
                     }
                 }));
+        // 瓦列里中士：关闭界面时保存五行装填指令
+        registrar.playToServer(SergeantProgramSavePayload.TYPE, SergeantProgramSavePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player().level().getBlockEntity(payload.pos())
+                            instanceof com.mcl.cbtc.blockentity.SergeantValeryBlockEntity sergeant
+                            && context.player().distanceToSqr(payload.pos().getCenter()) <= 64.0) {
+                        sergeant.applyProgram(payload.rows());
+                    }
+                }));
         registrar.playToClient(SoundPlayPayload.TYPE, SoundPlayPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onSoundPlay(payload)));
+        // 瓦列里中士：让客户端那侧的速射炮闩也播开合动画
+        registrar.playToClient(SergeantBreechTogglePayload.TYPE, SergeantBreechTogglePayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> {
+                    if (context.player().level().isClientSide
+                            && com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
+                        com.mcl.cbtc.client.sergeant.SergeantClientBreech.toggle(payload.mountPos());
+                    }
+                }));
         registrar.playToClient(MurmurPayload.TYPE, MurmurPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onMurmur(payload)));
         registrar.playToClient(MusicPlayPayload.TYPE, MusicPlayPayload.STREAM_CODEC,

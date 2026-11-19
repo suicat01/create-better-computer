@@ -1,0 +1,11 @@
+{
+  "variants": {
+    "ceiling=false": {
+      "model": "cbtc:block/sergeant_valery/block"
+    },
+    "ceiling=true": {
+      "model": "cbtc:block/sergeant_valery/block",
+      "x": 180
+    }
+  }
+}

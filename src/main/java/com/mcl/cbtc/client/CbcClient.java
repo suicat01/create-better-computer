@@ -32,6 +32,8 @@ public class CbcClient {
         if (com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
             SmartCannonMountModels.init();
         }
+        // 瓦列里中士的动力臂局部模型同样必须在资源重载前创建
+        com.mcl.cbtc.client.sergeant.SergeantArmModels.init();
     }
 
     @SubscribeEvent
@@ -121,6 +123,9 @@ public class CbcClient {
         // 讲解石及其石质变种同样可以发声，默念文字也要画在它上方
         event.registerBlockEntityRenderer(com.mcl.cbtc.registry.CbcBlockEntities.LECTURE_STONE.get(),
                 MurmurRenderer::new);
+        // 瓦列里中士：沿用动力臂的四段动画，贴图与局部模型换成美术那一套
+        event.registerBlockEntityRenderer(com.mcl.cbtc.registry.CbcBlockEntities.SERGEANT_VALERY.get(),
+                com.mcl.cbtc.client.sergeant.SergeantArmRenderer::new);
         // 超级烈焰人：复用原版烈焰人模型与动画，只换贴图
         event.registerEntityRenderer(com.mcl.cbtc.registry.CbcEntities.SUPER_BLAZE.get(),
                 SuperBlazeRenderer::new);
@@ -138,5 +143,7 @@ public class CbcClient {
         event.register(com.mcl.cbtc.registry.CbcMenus.EXPANDER.get(), ExpanderScreen::new);
         event.register(com.mcl.cbtc.registry.CbcMenus.SPEAKER.get(), SpeakerScreen::new);
         event.register(com.mcl.cbtc.registry.CbcMenus.MUSIC_MODULE.get(), MusicModuleScreen::new);
+        event.register(com.mcl.cbtc.registry.CbcMenus.SERGEANT_VALERY.get(),
+                com.mcl.cbtc.client.sergeant.SergeantScreen::new);
     }
 }

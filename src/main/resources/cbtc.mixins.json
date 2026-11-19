@@ -4,12 +4,17 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [
     "SentryArmBlockEntityMixin",
+    "SergeantArmAccessMixin",
+    "ArmPlacementPacketMixin",
     "CbcCannonMountBlockEntityMixin",
     "CbcFixedCannonMountBlockEntityMixin",
     "CbcCannonMountPropertiesMixin",
-    "CbcContraptionRemixMixin"
+    "CbcContraptionRemixMixin",
+    "CbcCannonMountPointTypeMixin"
   ],
-  "client": [],
+  "client": [
+    "ArmInteractionPointHandlerMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },

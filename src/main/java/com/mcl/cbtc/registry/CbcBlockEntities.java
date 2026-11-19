@@ -87,6 +87,13 @@ public final class CbcBlockEntities {
                             CbcBlocks.ADVANCED_DISPLAY_LINK.get())
                     .build(null));
 
+    /** 瓦列里中士：继承 Create 动力臂的方块实体，动画与夹取逻辑全部沿用。 */
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<com.mcl.cbtc.blockentity.SergeantValeryBlockEntity>> SERGEANT_VALERY =
+            TYPES.register("sergeant_valery", () -> BlockEntityType.Builder
+                    .of(com.mcl.cbtc.blockentity.SergeantValeryBlockEntity::new,
+                            CbcBlocks.SERGEANT_VALERY.get())
+                    .build(null));
+
     private CbcBlockEntities() {
     }
 

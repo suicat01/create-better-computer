@@ -39,6 +39,7 @@ public final class CbcRegistries {
                         output.accept(CbcBlocks.INFO_TRANSMITTER.get());
                         output.accept(CbcBlocks.SPEED_CONTROLLER.get());
                         output.accept(CbcBlocks.ADVANCED_DISPLAY_LINK.get());
+                        output.accept(CbcBlocks.SERGEANT_VALERY.get());
                         // CBC 联动方块：未安装加农炮时这两个方块不存在，直接跳过
                         if (com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT != null) {
                             output.accept(com.mcl.cbtc.compat.cbc.CbcCannons.SMART_CANNON_MOUNT.get());
@@ -74,6 +75,7 @@ public final class CbcRegistries {
                         output.accept(CbcItems.SUPER_BLAZE_POWDER.get());
                         output.accept(CbcItems.BLAZE_SUPERCOMPUTER_UNIT.get());
                         output.accept(CbcItems.SHULKER_CHIP.get());
+                        output.accept(CbcItems.HERCULES_ENGINE.get());
                     })
                     .build());
 
@@ -82,6 +84,11 @@ public final class CbcRegistries {
 
     public static void register(IEventBus modEventBus) {
         CbcBlocks.register(modEventBus);
+        // 瓦列里中士的应力影响：Create 的物品提示（以及护目镜之外的应力显示）读的是
+        // BlockStressValues.IMPACTS，方块实体里的 calculateStressApplied 只作用于传动网络
+        modEventBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event) ->
+                event.enqueueWork(() -> com.simibubi.create.api.stress.BlockStressValues.IMPACTS.register(
+                        CbcBlocks.SERGEANT_VALERY.get(), () -> 256.0D)));
         CbcItems.register(modEventBus);
         CbcEntities.register(modEventBus);
         CbcPotions.register(modEventBus);

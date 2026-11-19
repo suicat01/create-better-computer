@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "AAB",
+    "A  ",
+    "EF "
+  ],
+  "key": {
+    "A": {
+      "item": "create:andesite_alloy"
+    },
+    "B": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "E": {
+      "item": "cbtc:hercules_engine"
+    },
+    "F": {
+      "item": "create:industrial_iron_block"
+    }
+  },
+  "result": {
+    "id": "cbtc:sergeant_valery",
+    "count": 1
+  }
+}
