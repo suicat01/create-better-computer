@@ -1070,24 +1070,48 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             return;
         }
         if ("aim_angles".equals(type.id())) {
-            // 水平 ⟨角度⟩° 垂直 ⟨角度⟩°
+            // 水平 ⟨角度⟩° 垂直 ⟨角度⟩° 参考系 ⟨世界/相对⟩
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_h"));
             cursor = addSlot(n, layout.headerItems, cursor, "h", depth + 1);
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_v"));
             cursor = addSlot(n, layout.headerItems, cursor, "v", depth + 1);
-            addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.frame_of"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("frame"));
             finishHeader(n, layout, depth);
             return;
         }
         if ("aim_offset".equals(type.id())) {
-            // [瞄准组件] 的准星处 偏移 水平 ⟨角度⟩° 垂直 ⟨角度⟩°
+            // [瞄准组件] 的准星处 偏移 水平 ⟨角度⟩° 垂直 ⟨角度⟩° 参考系 ⟨世界/相对⟩
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_offset_mid"));
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_h"));
             cursor = addSlot(n, layout.headerItems, cursor, "h", depth + 1);
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_v"));
             cursor = addSlot(n, layout.headerItems, cursor, "v", depth + 1);
-            addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.frame_of"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("frame"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("aim_clamp".equals(type.id())) {
+            // ⟨瞄准目标⟩ 垂直 ⟨下限⟩°~⟨上限⟩° 水平 ⟨下限⟩°~⟨上限⟩° 参考系 ⟨世界/相对⟩
+            cursor = addSlot(n, layout.headerItems, cursor, "target", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.clamp_v"));
+            cursor = addSlot(n, layout.headerItems, cursor, "v_min", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.clamp_to"));
+            cursor = addSlot(n, layout.headerItems, cursor, "v_max", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.clamp_h"));
+            cursor = addSlot(n, layout.headerItems, cursor, "h_min", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.clamp_to"));
+            cursor = addSlot(n, layout.headerItems, cursor, "h_max", depth + 1);
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.aim_deg"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.frame_of"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("frame"));
             finishHeader(n, layout, depth);
             return;
         }
@@ -1145,6 +1169,15 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
             cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
             cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.fire_control_kill_tail"));
             addParam(n, layout.headerItems, cursor, type.paramIndex("order"));
+            finishHeader(n, layout, depth);
+            return;
+        }
+        if ("predict_impact".equals(type.id())) {
+            // 将 [火控单位] 的落点标记到 [瞄准组件]
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.predict_impact_head"));
+            cursor = addParam(n, layout.headerItems, cursor, type.paramIndex("sentry"));
+            cursor = addText(layout.headerItems, cursor, tr("cbtc.gui.predict_impact_mid"));
+            addParam(n, layout.headerItems, cursor, type.paramIndex("sight"));
             finishHeader(n, layout, depth);
             return;
         }
@@ -1890,6 +1923,10 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("axis".equals(t.params().get(index)) && "sight_angle".equals(n.typeId())) {
             return "vertical".equals(stored) ? tr("cbtc.gui.angle_axis_v") : tr("cbtc.gui.angle_axis_h");
         }
+        // 瞄准角的参考系存英文键，界面上显示中文
+        if ("frame".equals(t.params().get(index))) {
+            return "relative".equals(stored) ? tr("cbtc.gui.frame_relative") : tr("cbtc.gui.frame_world");
+        }
         // 前/后方向：新存档存 front/back，旧存档存本地化文字，统一显示成当前语言
         if ("direction".equals(t.params().get(index))
                 && ("sight_line_angle".equals(n.typeId()) || "nav_line_direction".equals(n.typeId())
@@ -2264,6 +2301,7 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
                 || "sight_crosshair".equals(type.id()) || "aim_offset".equals(type.id())
                 || "sight_lock_clear_all".equals(type.id()) || "sight_lock_clear_last".equals(type.id())
                 || "fire_control_kill_all".equals(type.id()) || "sight_angle".equals(type.id())
+                || "predict_impact".equals(type.id())
                 || "sight_line_angle".equals(type.id());
     }
 
@@ -3936,6 +3974,11 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         if ("sight_angle".equals(typeId) && "axis".equals(key)) {
             return new String[]{tr("cbtc.gui.angle_axis_h"), tr("cbtc.gui.angle_axis_v")};
         }
+        // 三个瞄准角积木都能选参考系：世界方位 / 以火控单位初始朝向为 0°
+        if (("aim_angles".equals(typeId) || "aim_offset".equals(typeId) || "aim_clamp".equals(typeId))
+                && "frame".equals(key)) {
+            return new String[]{tr("cbtc.gui.frame_world"), tr("cbtc.gui.frame_relative")};
+        }
         if ("nav_bearing_direction".equals(typeId) && "direction".equals(key)) {
             return compassChoices();
         }
@@ -4048,6 +4091,12 @@ public class ComputerScreen extends AbstractContainerScreen<ComputerMenu> {
         }
         if (display.equals(tr("cbtc.gui.angle_axis_v"))) {
             return "vertical";
+        }
+        if (display.equals(tr("cbtc.gui.frame_world"))) {
+            return "world";
+        }
+        if (display.equals(tr("cbtc.gui.frame_relative"))) {
+            return "relative";
         }
         if (display.equals(tr("cbtc.gui.side_front"))) {
             return "front";

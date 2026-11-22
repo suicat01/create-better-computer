@@ -1,5 +1,57 @@
 # 更新日志
 
+## 1.1.3.1-beta
+
+> 测试版（Beta）：新增「预测炮弹落点」积木，落点直接在世界里显示；建议先在备份存档中验证。
+
+### 新增
+
+- **预测炮弹落点积木**：读取指定火控单位（CBC 智能炮座 / 智能固定炮座）当前装填炮弹的真实初速、重力、阻力与炮口朝向，在客户端本地模拟弹道并在世界里绘制落点：
+  - 地面或墙面落点画一圈琥珀色圆环，圆环平面跟随命中面的法线；
+  - 从落点沿炮弹入射方向画一条直线，直观显示落弹角度；
+  - 落点在飞艇等航空学物理结构上时按结构姿态插值，标记会随结构移动与倾斜；
+  - 服务端每刻同步发射参数，客户端本地计算并逐帧渲染，降低延迟；
+  - 标记只保留 1 秒，积木需要放进「重复执行」持续刷新；
+  - 需要同时安装 Create Big Cannons 与 Create: Radars，且火炮已组装并装填大口径炮弹。
+
+### 改进
+
+- **瞄准组件中键锁定**：改为「精确命中 + 基准线圆柱」两段判定，准星对齐即可锁定；索敌距离提升到 96 格（服务端校验上限 128 格），隔墙、隔玻璃也能锁定。
+- **锁定半径随距离自适应**：近距离收紧到 0.6 格，远距离按约 1.5° 放宽，减少误锁。
+
+### 修复
+
+- 修复落点判定跳过前 2 tick 导致瞄准近处墙体 / 地板时射线穿透、圆环竖立的问题。
+- 修复客户端模拟使用 CBC 流体阻力时报 `LoadedFluidDrag$Unavailable`、落点完全不显示的问题；客户端改用简化阻力积分。
+
+---
+
+## 1.1.3.1-beta (English)
+
+> Beta: adds a "Predict Shell Impact" block that renders the impact point directly in the world. Please validate in a backup world first.
+
+### Added
+
+- **Predict Shell Impact block**: reads the loaded shell's real muzzle velocity, gravity, drag and barrel direction from the selected fire-control unit (CBC Smart Cannon Mount / Smart Fixed Cannon Mount), simulates the trajectory locally on the client, and renders the impact point in the world:
+  - draws an amber ring on the ground or wall, aligned to the hit surface normal;
+  - draws a line from the impact point along the shell's incoming direction to show the impact angle;
+  - attaches the marker to Sable / Aeronautics physics structures with an interpolated pose, so it moves and tilts with the vehicle;
+  - the server syncs firing parameters every tick, and the client predicts and renders per frame to keep latency low;
+  - the marker lasts 1 second, so the block must run inside a repeat loop;
+  - requires both Create Big Cannons and Create: Radars, with an assembled cannon and a loaded big-cannon shell.
+
+### Improved
+
+- **Gunner sight middle-click locking**: now uses a precise hit plus an alignment cylinder, so the crosshair only needs to line up. Lock range increased to 96 blocks (server validation up to 128), and it works through walls and glass.
+- **Distance-adaptive locking radius**: 0.6 blocks up close, widening to roughly 1.5° at range, reducing accidental locks.
+
+### Fixed
+
+- Fixed impact detection skipping the first 2 ticks, which caused nearby walls / floors to be missed and produced a vertical ring.
+- Fixed client-side simulation throwing `LoadedFluidDrag$Unavailable` (CBC fluid drag is server-side), which made the marker never appear; the client now uses simplified drag integration.
+
+---
+
 ## 1.1.3
 
 > 正式版：新增瓦列里中士、大力神引擎与相关合成，并补齐智能炮座系列与动力臂的联动。

@@ -41,8 +41,18 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             case 2 -> new Str(tag.getString("V"));
             case 3 -> new Seq(readSeq(tag));
             case 4 -> new Time(tag.getLong("G"), tag.getLong("R"), tag.getString("U"));
-            case 5 -> new Target(tag.contains("S", Tag.TAG_STRING) ? tag.getString("S") : null,
-                    tag.getBoolean("R"), tag.getDouble("Y"), tag.getDouble("P"));
+            case 5 -> {
+                net.minecraft.nbt.ListTag clampTag = tag.getList("C", Tag.TAG_DOUBLE);
+                double[] clamp = new double[clampTag.size()];
+                for (int i = 0; i < clamp.length; i++) {
+                    clamp[i] = clampTag.getDouble(i);
+                }
+                yield new Target(tag.contains("S", Tag.TAG_STRING) ? tag.getString("S") : null,
+                        tag.getBoolean("R"), tag.getDouble("Y"), tag.getDouble("P"),
+                        tag.getBoolean("F"),
+                        clamp.length == 4 ? new Target.Clamp(clamp[0], clamp[1], clamp[2], clamp[3],
+                                tag.getBoolean("CR")) : null);
+            }
             default -> new Num(tag.getDouble("V"), false, tag.getString("U"));
         };
     }
@@ -254,21 +264,50 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
      * <p>
      * 水平角与 MC 朝向同一套：正南 0°，向西为正，正东 -90°，正北 ±180°；垂直角抬头为正。
      * {@code offset} 为真表示在准星方向的基础上再叠加这两个角度。
+     * {@code relative} 为真表示角度以火控单位的初始朝向为 0°（而不是世界方位）。
+     * {@code clamp} 不为空时，最终瞄准角会被夹进给定范围，由瞄准时统一处理。
      */
-    record Target(@Nullable String sight, boolean offset, double yaw, double pitch) implements Value {
+    record Target(@Nullable String sight, boolean offset, double yaw, double pitch,
+                  boolean relative, @Nullable Clamp clamp) implements Value {
+        /** 瞄准角限制范围（度）：先按参考系换算，再夹取。 */
+        public record Clamp(double vMin, double vMax, double hMin, double hMax, boolean relative) {
+            Clamp(double vMin, double vMax, double hMin, double hMax) {
+                this(vMin, vMax, hMin, hMax, false);
+            }
+        }
+
+        Target(String sight, boolean offset, double yaw, double pitch) {
+            this(sight, offset, yaw, pitch, false, null);
+        }
+
         /** 瞄准组件佩戴者的准星处。 */
         public static Target crosshair(String sight) {
-            return new Target(sight, false, 0.0D, 0.0D);
+            return new Target(sight, false, 0.0D, 0.0D, false, null);
         }
 
         /** 直接用水平/垂直角度指方向。 */
         public static Target angles(double yaw, double pitch) {
-            return new Target(null, false, yaw, pitch);
+            return new Target(null, false, yaw, pitch, false, null);
+        }
+
+        /** 直接用水平/垂直角度指方向；{@code relative} 表示以火控单位的初始朝向为 0°。 */
+        public static Target angles(double yaw, double pitch, boolean relative) {
+            return new Target(null, false, yaw, pitch, relative, null);
         }
 
         /** 准星处再叠加角度偏移。 */
         public static Target crosshairOffset(String sight, double yaw, double pitch) {
-            return new Target(sight, true, yaw, pitch);
+            return new Target(sight, true, yaw, pitch, false, null);
+        }
+
+        /** 准星处再叠加角度偏移，并指定参考系。 */
+        public static Target crosshairOffset(String sight, double yaw, double pitch, boolean relative) {
+            return new Target(sight, true, yaw, pitch, relative, null);
+        }
+
+        /** 套上一层角度限制（范围与参考系由「限制瞄准角」提供，不改动内层目标的参考系）。 */
+        public Target withClamp(Clamp limit) {
+            return new Target(sight, offset, yaw, pitch, relative, limit);
         }
 
         /** 是否以准星处为基准；否则只看角度。 */
@@ -288,11 +327,15 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
 
         @Override
         public String asText() {
+            String base;
             if (!usesSight()) {
-                return "水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°";
+                base = "水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°";
+            } else {
+                String sightBase = "准星 " + sight;
+                base = offset ? sightBase + " 水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°"
+                        : sightBase;
             }
-            String base = "准星 " + sight;
-            return offset ? base + " 水平 " + formatNumber(yaw) + "° 垂直 " + formatNumber(pitch) + "°" : base;
+            return relative ? "相对 " + base : base;
         }
 
         @Override
@@ -304,6 +347,16 @@ public sealed interface Value permits Value.Num, Value.Bool, Value.Str, Value.Se
             tag.putBoolean("R", offset);
             tag.putDouble("Y", yaw);
             tag.putDouble("P", pitch);
+            tag.putBoolean("F", relative);
+            if (clamp != null) {
+                net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
+                list.add(net.minecraft.nbt.DoubleTag.valueOf(clamp.vMin()));
+                list.add(net.minecraft.nbt.DoubleTag.valueOf(clamp.vMax()));
+                list.add(net.minecraft.nbt.DoubleTag.valueOf(clamp.hMin()));
+                list.add(net.minecraft.nbt.DoubleTag.valueOf(clamp.hMax()));
+                tag.put("C", list);
+                tag.putBoolean("CR", clamp.relative());
+            }
         }
     }
 

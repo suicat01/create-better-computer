@@ -28,6 +28,8 @@ public class CbcClient {
         // 枪炮手的瞄准组件：Ctrl + 滚轮调整画面缩放
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(GunnerSightZoom::onMouseScroll);
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(GunnerSightZoom::onComputeFov);
+        // 预测炮弹落点：在世界里画圆环与入射角度线（含航空学物理结构附着）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ImpactMarkerRenderer::onRenderLevel);
         // 智能炮座的局部模型必须在第一次资源重载前创建，否则 Flywheel 收集不到，渲染成紫黑格
         if (com.mcl.cbtc.compat.cbc.CbcCannons.loaded()) {
             SmartCannonMountModels.init();

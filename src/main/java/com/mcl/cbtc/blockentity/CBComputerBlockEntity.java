@@ -1303,6 +1303,9 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         if (arm == null) {
             return;
         }
+        net.minecraft.world.phys.Vec3 center = cbtc$armCenter(serverLevel, arm);
+        // 相对参考系：火控单位方块的初始朝向就是 0°
+        double referenceYaw = cbtc$initialYaw(arm);
         net.minecraft.world.phys.Vec3 point;
         if (target.usesSight()) {
             com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(target.sight());
@@ -1315,14 +1318,21 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
             }
             point = cbtc$crosshairPoint(wearer);
             if (target.offset()) {
-                // 偏移按角度叠加：以火控单位为原点把"臂→准星"转一下，距离保持不变
-                point = cbtc$rotateAround(cbtc$armCenter(serverLevel, arm), point,
-                        target.yaw(), target.pitch());
+                // 偏移是在当前方向上再加角度：水平分量绕竖直轴叠加，两种参考系结果一致
+                point = cbtc$rotateAround(center, point, target.yaw(), target.pitch());
             }
         } else {
             // 只给了角度：从火控单位自身出发，沿方向取远处一点
-            point = cbtc$armCenter(serverLevel, arm)
-                    .add(cbtc$direction(target.yaw(), target.pitch()).scale(256.0D));
+            // 角度算不出来时这次不刷新，保持上一次朝向
+            if (!Double.isFinite(target.yaw()) || !Double.isFinite(target.pitch())) {
+                return;
+            }
+            double yaw = target.relative() ? referenceYaw + target.yaw() : target.yaw();
+            point = center.add(cbtc$direction(yaw, target.pitch()).scale(256.0D));
+        }
+        if (target.clamp() != null) {
+            point = cbtc$clampAim(center, point, target.clamp(),
+                    target.clamp().relative() ? referenceYaw : Double.NaN);
         }
         if (cbtc$isSmartMount(arm)) {
             com.mcl.cbtc.compat.cbc.CannonMountCompat.aim(arm, point);
@@ -1381,6 +1391,66 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         double horizontal = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
         double pitch = Math.toDegrees(Math.atan2(dir.y, horizontal)) + pitchOffset;
         return origin.add(cbtc$direction(yaw, Math.max(-90.0D, Math.min(90.0D, pitch))).scale(length));
+    }
+
+    /**
+     * 火控单位的初始朝向（方块正面）对应的世界方位角：正南 0°、向西为正。
+     * <p>
+     * 「相对」参考系用它当 0°；炮座 / 哨戒臂都是水平朝向的方块。
+     */
+    private static double cbtc$initialYaw(net.minecraft.world.level.block.entity.BlockEntity arm) {
+        net.minecraft.world.level.block.state.BlockState state = arm.getBlockState();
+        net.minecraft.core.Direction facing = null;
+        if (state.hasProperty(net.minecraft.world.level.block.DirectionalBlock.FACING)) {
+            facing = state.getValue(net.minecraft.world.level.block.DirectionalBlock.FACING);
+        } else if (state.hasProperty(
+                net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING)) {
+            facing = state.getValue(
+                    net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+        }
+        if (facing == null || (facing.getStepX() == 0 && facing.getStepZ() == 0)) {
+            facing = net.minecraft.core.Direction.SOUTH;
+        }
+        return Math.toDegrees(Math.atan2(-facing.getStepX(), facing.getStepZ()));
+    }
+
+    /**
+     * 按「限制瞄准角」把方向夹一次。
+     * <p>
+     * {@code referenceYaw} 为 NaN 时按世界方位处理；否则先减去初始朝向，夹完再加回去，
+     * 水平角以范围中点为基准，跨 ±180 的范围也能正确工作。
+     */
+    private static net.minecraft.world.phys.Vec3 cbtc$clampAim(net.minecraft.world.phys.Vec3 center,
+                                                               net.minecraft.world.phys.Vec3 point,
+                                                               com.mcl.cbtc.core.Value.Target.Clamp clamp,
+                                                               double referenceYaw) {
+        net.minecraft.world.phys.Vec3 dir = point.subtract(center);
+        double length = dir.length();
+        if (length < 1.0E-6D) {
+            return point;
+        }
+        double yaw = Math.toDegrees(Math.atan2(-dir.x, dir.z));
+        double pitch = Math.toDegrees(Math.atan2(dir.y, Math.sqrt(dir.x * dir.x + dir.z * dir.z)));
+        double base = Double.isNaN(referenceYaw) ? 0.0D : referenceYaw;
+        double centerH = (clamp.hMin() + clamp.hMax()) / 2.0D;
+        double half = (clamp.hMax() - clamp.hMin()) / 2.0D;
+        double offset = cbtc$wrapAngle(cbtc$wrapAngle(yaw - base) - centerH);
+        offset = Math.max(-half, Math.min(half, offset));
+        double outYaw = base + centerH + offset;
+        double outPitch = Math.max(-90.0D, Math.min(90.0D,
+                Math.max(clamp.vMin(), Math.min(clamp.vMax(), pitch))));
+        return center.add(cbtc$direction(outYaw, outPitch).scale(length));
+    }
+
+    /** 角度归一到 -180 ~ +180。 */
+    private static double cbtc$wrapAngle(double degrees) {
+        double value = degrees % 360.0D;
+        if (value > 180.0D) {
+            value -= 360.0D;
+        } else if (value <= -180.0D) {
+            value += 360.0D;
+        }
+        return value;
     }
 
     /** 哨戒动力臂射击：每执行一次模拟一次扳机，点射/连发节奏交给枪械自身。 */
@@ -1540,6 +1610,45 @@ public class CBComputerBlockEntity extends BlockEntity implements MenuProvider, 
         }
         killJob = new KillJob(sentry.id(), sight.id(),
                 order == null || order.isBlank() ? "lock" : order.trim());
+    }
+
+    /**
+     * 把指定火控单位当前炮弹的发射参数同步给戴着瞄准组件的玩家。
+     * <p>
+     * 落点由客户端自行模拟并渲染，服务端这里只读参数、不做弹道计算；
+     * 每刻同步一次，客户端拿到最新炮口朝向即可立即更新标记。
+     */
+    @Override
+    public void predictImpact(String sentryDeviceId, String sightDeviceId) {
+        if (!(level instanceof ServerLevel serverLevel)
+                || !com.mcl.cbtc.compat.cbc.CbcCannons.loaded()
+                || !com.mcl.cbtc.compat.Radar.loaded()
+                || !com.mcl.cbtc.device.Devices.hasFireControl()) {
+            return;
+        }
+        java.util.Map<String, com.mcl.cbtc.item.DeviceModuleItem.Device> devices = boundDevices();
+        com.mcl.cbtc.item.DeviceModuleItem.Device sight = devices.get(sightDeviceId);
+        if (sight == null || sight.kind() != com.mcl.cbtc.device.DeviceKind.GUNNER_SIGHT) {
+            return;
+        }
+        net.minecraft.server.level.ServerPlayer wearer = findSightWearer(serverLevel, sight.id());
+        if (wearer == null) {
+            return;
+        }
+        net.minecraft.world.level.block.entity.BlockEntity mount = sentryArm(devices.get(sentryDeviceId));
+        if (mount == null || !cbtc$isSmartMount(mount)) {
+            return;
+        }
+        com.mcl.cbtc.compat.cbc.CannonImpactPredictor.Profile profile =
+                com.mcl.cbtc.compat.cbc.CannonImpactPredictor.profile(serverLevel, mount);
+        if (profile == null) {
+            return;
+        }
+        net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(wearer,
+                new com.mcl.cbtc.network.ImpactPointPayload(serverLevel.dimension().location(),
+                        profile.muzzle(), profile.direction(), profile.inheritedVelocity(),
+                        profile.speed(), profile.gravity(), profile.drag(),
+                        profile.quadratic(), profile.dragDensity()));
     }
 
     /** 火控击杀任务的每刻推进：挑第一个目标、瞄准，能打到就扣扳机。 */

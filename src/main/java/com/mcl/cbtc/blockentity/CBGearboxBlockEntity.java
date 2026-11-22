@@ -258,6 +258,9 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity implemen
      */
     private void startTracking(float speed, double target, boolean shortest, boolean counterClockwise) {
         tracking = true;
+        // 跟随时账面角度由 tick 逐刻累加，之前没结清的定角增量不能再补进来，
+        // 否则被打断的定角会在收尾时多记一笔，之后的“旋转至”全部偏掉
+        pendingBookDelta = Double.NaN;
         trackTarget = target;
         trackSpeed = speed;
         trackShortest = shortest;
@@ -294,6 +297,13 @@ public class CBGearboxBlockEntity extends SequencedGearshiftBlockEntity implemen
             increase = along > 0;
         }
         float direction = increase ? Math.abs(trackSpeed) : -Math.abs(trackSpeed);
+        // 倍率是相对输入轴的：输入轴反转时，正向倍率实际转的是反方向。
+        // 最短路径靠“残差不断变小”收敛，这里必须把真实转向换算成倍率方向，
+        // 否则账面角度会朝反方向涨、残差永远不减小，齿轮箱看起来就是一直在转却停不下来。
+        // 正向 / 反向两种模式是定死一个方向绕圈，扫过目标就会停，所以不受影响。
+        if (trackShortest && speed < 0) {
+            direction = -direction;
+        }
         boolean sameAsRunning = !isIdle()
                 && Math.signum(getModifier()) == Math.signum(direction)
                 && Math.abs(Math.abs(getModifier()) - Math.abs(trackSpeed)) < 1e-3f;

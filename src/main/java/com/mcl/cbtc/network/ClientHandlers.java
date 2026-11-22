@@ -77,6 +77,14 @@ public final class ClientHandlers {
         com.mcl.cbtc.client.GunnerSightTargets.accept(payload.dimension(), payload.targets());
     }
 
+    /** 预测炮弹落点：收到最新的发射参数，客户端自行模拟并渲染落点。 */
+    public static void onImpactPoint(ImpactPointPayload payload) {
+        com.mcl.cbtc.client.GunnerSightImpact.accept(payload.dimension(),
+                payload.muzzle(), payload.direction(), payload.inheritedVelocity(),
+                payload.speed(), payload.gravity(), payload.drag(),
+                payload.quadratic(), payload.dragDensity());
+    }
+
     /** 锁定表：更新戴着瞄准组件的玩家屏幕上要标绿并显示序号的实体。 */
     public static void onSightLocks(GunnerSightLocksPayload payload) {
         com.mcl.cbtc.client.GunnerSightLocksClient.accept(payload);

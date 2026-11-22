@@ -997,6 +997,11 @@ public final class ProgramVM {
                 host.fireControlKillAll(node.param("sentry"), node.param("sight"), node.param("order"));
                 return "exec";
             }
+            case "predict_impact" -> {
+                // 每执行一次刷新一次落点标记；标记在客户端保留 2 秒，需要重复执行持续调用
+                host.predictImpact(node.param("sentry"), node.param("sight"));
+                return "exec";
+            }
             case "speed_controller_set" -> {
                 // 转速填绝对值，方向由顺逆时针选择器决定
                 double rpm = Math.abs(numberOrParam(node, "rpm"));
@@ -1322,10 +1327,13 @@ public final class ProgramVM {
             case "sight_crosshair" -> Value.Target.crosshair(source.param("sight").trim());
             case "aim_angles" -> Value.Target.angles(
                     wrapAngle(numberOrParam(source, "h")),
-                    clampPitch(numberOrParam(source, "v")));
+                    clampPitch(numberOrParam(source, "v")),
+                    relativeFrame(source.param("frame")));
             case "aim_offset" -> Value.Target.crosshairOffset(source.param("sight").trim(),
                     wrapAngle(numberOrParam(source, "h")),
-                    clampPitch(numberOrParam(source, "v")));
+                    clampPitch(numberOrParam(source, "v")),
+                    relativeFrame(source.param("frame")));
+            case "aim_clamp" -> clampAimTarget(source, depth);
             // 佩戴者朝向：水平按 MC 朝向（正南 0°），上下按俯仰角（抬头为正），都是度数
             case "sight_angle" -> new Value.Num(host.sightAngle(source.param("sight"),
                     source.param("axis")), false, "°");
@@ -2044,6 +2052,31 @@ public final class ProgramVM {
     /** 凹槽里的值转成瞄准目标；空槽（或嵌了别的积木）时按 0°/0° 处理。 */
     private static Value.Target aimTargetOf(Value value) {
         return value instanceof Value.Target target ? target : Value.Target.angles(0, 0);
+    }
+
+    /**
+     * 「限制瞄准角」：给内嵌目标套上一层角度范围。
+     * <p>
+     * 真正的夹取放在瞄准时做——只有那里知道火控单位的初始朝向，
+     * 准星类目标也必须先换算成角度才能比较。
+     */
+    private Value clampAimTarget(Node source, int depth) {
+        Value inner = eval(source, "target", depth);
+        if (!(inner instanceof Value.Target target)) {
+            return Value.Target.angles(0, 0);
+        }
+        double vMin = Math.min(numberOrParam(source, "v_min"), numberOrParam(source, "v_max"));
+        double vMax = Math.max(numberOrParam(source, "v_min"), numberOrParam(source, "v_max"));
+        double hMin = Math.min(numberOrParam(source, "h_min"), numberOrParam(source, "h_max"));
+        double hMax = Math.max(numberOrParam(source, "h_min"), numberOrParam(source, "h_max"));
+        return target.withClamp(new Value.Target.Clamp(vMin, vMax, hMin, hMax,
+                relativeFrame(source.param("frame"))));
+    }
+
+    /** 瞄准角的参考系：相对（以火控单位初始朝向为 0°）还是世界方位。 */
+    private static boolean relativeFrame(String frame) {
+        String text = frame == null ? "" : frame.trim();
+        return text.startsWith("相对") || text.equals("relative");
     }
 
     /** 角度四则运算；乘除也要归一，所以结果一律再过一次 wrapAngle。 */

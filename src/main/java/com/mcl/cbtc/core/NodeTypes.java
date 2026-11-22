@@ -278,11 +278,12 @@ public final class NodeTypes {
      * <p>
      * 水平与 MC 朝向同一套（正南 0°、向西为正，-180~180），垂直抬头为正（-90~90）；
      * 方向以火控单位自身为原点换算成瞄准点。两个角度槽都可填可嵌。
+     * 参考系可选择世界方位，或「相对」——以火控单位的初始朝向为 0°。
      */
     public static final NodeType AIM_ANGLES = add("aim_angles", NodeCategory.AERO,
             List.of(new NodeType.Port("h", PortKind.NUMBER), new NodeType.Port("v", PortKind.NUMBER)),
             List.of(new NodeType.Port("value", PortKind.TARGET)),
-            List.of("h", "v"), List.of("0", "0"));
+            List.of("h", "v", "frame"), List.of("0", "0", "world"));
 
     /**
      * 瞄准目标：准星处再叠加水平/垂直角度偏移。
@@ -292,7 +293,22 @@ public final class NodeTypes {
     public static final NodeType AIM_OFFSET = add("aim_offset", NodeCategory.AERO,
             List.of(new NodeType.Port("h", PortKind.NUMBER), new NodeType.Port("v", PortKind.NUMBER)),
             List.of(new NodeType.Port("value", PortKind.TARGET)),
-            List.of("sight", "h", "v"), List.of("", "0", "0"));
+            List.of("sight", "h", "v", "frame"), List.of("", "0", "0", "world"));
+
+    /**
+     * 瞄准目标：把内嵌目标的瞄准角限制在给定范围内（限制转动范围）。
+     * <p>
+     * 凹槽里可以嵌入任意瞄准目标积木（准星处 / 书写角度 / 准星偏移），
+     * 输出仍是瞄准目标，可以直接接「火控单位瞄准」。
+     * 准星类目标在求值时先换算成佩戴者当前的角度再夹取，限制的是真实瞄准方向。
+     */
+    public static final NodeType AIM_CLAMP = add("aim_clamp", NodeCategory.AERO,
+            List.of(new NodeType.Port("target", PortKind.TARGET),
+                    new NodeType.Port("v_min", PortKind.NUMBER), new NodeType.Port("v_max", PortKind.NUMBER),
+                    new NodeType.Port("h_min", PortKind.NUMBER), new NodeType.Port("h_max", PortKind.NUMBER)),
+            List.of(new NodeType.Port("value", PortKind.TARGET)),
+            List.of("v_min", "v_max", "h_min", "h_max", "frame"),
+            List.of("-90", "90", "-180", "180", "world"));
 
     /**
      * 火控单位瞄准：让动力臂/智能炮座朝「瞄准目标」凹槽里嵌的目标指。
@@ -338,6 +354,18 @@ public final class NodeTypes {
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of(new NodeType.Port("exec", PortKind.FLOW)),
             List.of("sentry", "sight", "order"), List.of("", "", "lock"));
+
+    /**
+     * 预测炮弹落点：按指定火控单位（CBC 火炮底座）当前装填的炮弹与朝向，
+     * 模拟出这一发会落在哪里，并把这个点标在瞄准组件佩戴者的 HUD 上。
+     * <p>
+     * 标记只保留 2 秒，所以要放进「重复执行」里持续刷新；
+     * 没有组装好的火炮、没有装填炮弹或没装雷达模组时不会产生标记。
+     */
+    public static final NodeType PREDICT_IMPACT = add("predict_impact", NodeCategory.AERO,
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of(new NodeType.Port("exec", PortKind.FLOW)),
+            List.of("sentry", "sight"), List.of("", ""));
 
     /**
      * 瞄准组件佩戴者的朝向角：水平输出视线在水平面上的方位角，上下输出俯仰角。

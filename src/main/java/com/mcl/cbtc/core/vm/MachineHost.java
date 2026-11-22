@@ -181,6 +181,14 @@ public interface MachineHost {
     }
 
     /**
+     * 预测指定火控单位当前炮弹的落点，并标记到戴着瞄准组件的玩家屏幕上。
+     * <p>
+     * 每次执行只刷新一次落点，标记在客户端保留 2 秒，所以要放进「重复执行」里持续调用。
+     */
+    default void predictImpact(String sentryDeviceId, String sightDeviceId) {
+    }
+
+    /**
      * 瞄准组件佩戴者的朝向角；axis 为 horizontal（水平方位角）/ vertical（上下俯仰角）。
      * 没选瞄准组件或没人佩戴时返回 NaN。
      */

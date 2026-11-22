@@ -71,6 +71,8 @@ public final class CbcNetwork {
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onDeviceSelect(payload)));
         registrar.playToClient(SightTargetsPayload.TYPE, SightTargetsPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> ClientHandlers.onSightTargets(payload)));
+        registrar.playToClient(ImpactPointPayload.TYPE, ImpactPointPayload.STREAM_CODEC,
+                (payload, context) -> context.enqueueWork(() -> ClientHandlers.onImpactPoint(payload)));
         registrar.playToServer(GunnerSightLockPayload.TYPE, GunnerSightLockPayload.STREAM_CODEC,
                 (payload, context) -> context.enqueueWork(() -> {
                     if (!(context.player() instanceof net.minecraft.server.level.ServerPlayer player)
@@ -82,7 +84,8 @@ public final class CbcNetwork {
                         return;
                     }
                     net.minecraft.world.entity.Entity entity = level.getEntity(payload.entityId());
-                    if (entity == null || entity == player || entity.distanceToSqr(player) > 64.0D * 64.0D) {
+                    // 锁定只看距离与佩戴状态，不做视线/方块检测：隔墙同样可以锁定
+                    if (entity == null || entity == player || entity.distanceToSqr(player) > 128.0D * 128.0D) {
                         return;
                     }
                     int seq = com.mcl.cbtc.device.GunnerSightLocks.lock(sightId, level, entity);
