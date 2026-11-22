@@ -1,12 +1,13 @@
 package com.mcl.cbtc.client;
 
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
-import dev.ryanhcode.sable.companion.math.BoundingBox3ic;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import dev.ryanhcode.sable.sublevel.plot.LevelPlot;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -34,23 +35,50 @@ final class ImpactSubLevelResolver {
         if (container == null) {
             return world;
         }
+        SubLevel fallback = null;
+        int candidates = 0;
         for (SubLevel sub : container.getAllSubLevels()) {
             Vec3 local = sub.logicalPose().transformPositionInverse(point);
             LevelPlot plot = sub.getPlot();
             if (plot == null || !plot.contains(local)) {
                 continue;
             }
-            // 地块只按 X/Z 判定，再用高度范围排除"结构正上方/正下方"的落点
-            BoundingBox3ic bounds = plot.getBoundingBox();
-            if (bounds != null
-                    && (local.y < bounds.minY() - 2.0D || local.y > bounds.maxY() + 2.0D)) {
-                continue;
+            // 客户端的 LevelPlot 不维护包围盒（updateBoundingBox 在客户端直接返回），
+            // 改为检查结构存储区里这个位置附近是否真的有方块，排除"结构正上方/正下方"的落点
+            if (nearStructureBlock(minecraft.level, local)) {
+                return attachTo(sub, point, normal, direction, ticks, local);
             }
-            Pose3dc pose = sub.logicalPose();
-            return new GunnerSightImpact.Mark(point, normal, direction, ticks, sub.getUniqueId(),
-                    local, pose.transformNormalInverse(normal), pose.transformNormalInverse(direction));
+            // 结构区块还没在客户端加载时拿不到方块，记下来做唯一候选兜底
+            fallback = sub;
+            candidates++;
+        }
+        if (candidates == 1) {
+            Vec3 local = fallback.logicalPose().transformPositionInverse(point);
+            return attachTo(fallback, point, normal, direction, ticks, local);
         }
         return world;
+    }
+
+    private static GunnerSightImpact.Mark attachTo(SubLevel sub, Vec3 point, Vec3 normal,
+                                                   Vec3 direction, int ticks, Vec3 local) {
+        Pose3dc pose = sub.logicalPose();
+        return new GunnerSightImpact.Mark(point, normal, direction, ticks, sub.getUniqueId(),
+                local, pose.transformNormalInverse(normal), pose.transformNormalInverse(direction));
+    }
+
+    /** 结构存储区坐标附近是否真的有方块（客户端用它判断落点是否贴着结构表面）。 */
+    private static boolean nearStructureBlock(Level level, Vec3 local) {
+        BlockPos center = BlockPos.containing(local);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (!level.getBlockState(center.offset(dx, dy, dz)).isAir()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     static GunnerSightImpact.Mark resolve(Minecraft minecraft, GunnerSightImpact.Mark mark,

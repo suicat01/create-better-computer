@@ -23,6 +23,7 @@
 
 - 修复落点判定跳过前 2 tick 导致瞄准近处墙体 / 地板时射线穿透、圆环竖立的问题。
 - 修复客户端模拟使用 CBC 流体阻力时报 `LoadedFluidDrag$Unavailable`、落点完全不显示的问题；客户端改用简化阻力积分。
+- 修复落点标记在飞艇等物理结构上无法附着、弹道线方向错误的问题；客户端不再依赖结构地块的包围盒，改为检查结构存储区附近的真实方块。
 
 ---
 
@@ -49,6 +50,7 @@
 
 - Fixed impact detection skipping the first 2 ticks, which caused nearby walls / floors to be missed and produced a vertical ring.
 - Fixed client-side simulation throwing `LoadedFluidDrag$Unavailable` (CBC fluid drag is server-side), which made the marker never appear; the client now uses simplified drag integration.
+- Fixed the impact marker failing to attach to physical structures such as airships and the trajectory line pointing incorrectly; the client no longer relies on the plot bounding box and instead checks for real blocks near the local impact position.
 
 ---
 
